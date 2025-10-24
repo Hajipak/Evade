@@ -5,7 +5,7 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/he
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/Evade%20Zoom%20Button.lua'))()
 -- loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Padding%20space.lua'))()
 -- Timer Loadstring
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/TimerGUI-NoRepeat'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Timer-NoRepeat'))()
 --filename "TimerGUI" code inside:
 --[[
 local Players = game:GetService("Players")
@@ -221,5 +221,6 @@ autoSaveConfig()
 ]]
 
 --no way you falling for that ðŸ’€
+
 
 
