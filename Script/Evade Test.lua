@@ -5782,7 +5782,7 @@ if player.Character then
 end
 
 --[[the part of loadstring prevent error]]
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/More-loadstring.txt'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua'))()
 
                 local securityPart = Instance.new("Part")
                 securityPart.Name = "SecurityPart"
@@ -5793,5 +5793,6 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/he
                 securityPart.Parent = workspace
 
                 rootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
+
 
 
