@@ -259,7 +259,8 @@ Fluent:Notify({
 -- which has been marked to be one that auto loads!
 SaveManager:LoadAutoloadConfig()
 
---// MOBILE SHOW / HIDE (MINIMIZE TOGGLE)
+--// MOBILE TOGGLE BUTTON (SIMULATE LEFT CONTROL)
+local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 
@@ -267,9 +268,9 @@ local Player = Players.LocalPlayer
 local PlayerGui = Player:FindFirstChildOfClass("PlayerGui") or Instance.new("ScreenGui", CoreGui)
 
 local ToggleGui = Instance.new("ScreenGui")
-ToggleGui.Name = "FluentToggleUI"
-ToggleGui.Parent = PlayerGui
+ToggleGui.Name = "FluentMobileToggle"
 ToggleGui.ResetOnSpawn = false
+ToggleGui.Parent = PlayerGui
 
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Parent = ToggleGui
@@ -277,25 +278,14 @@ ToggleButton.Size = UDim2.new(0, 80, 0, 40)
 ToggleButton.Position = UDim2.new(1, -100, 1, -60)
 ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Text = "Hide"
+ToggleButton.Text = "Toggle"
 ToggleButton.TextSize = 18
 ToggleButton.Draggable = true
 
-local Minimized = false
-
 ToggleButton.MouseButton1Click:Connect(function()
-	if Minimized then
-		-- tampilkan UI kembali
-		if Window.Instance then
-			Window.Instance.Visible = true
-		end
-		ToggleButton.Text = "Hide"
-	else
-		-- sembunyikan UI
-		if Window.Instance then
-			Window.Instance.Visible = false
-		end
-		ToggleButton.Text = "Show"
-	end
-	Minimized = not Minimized
+	-- Simulasikan LeftControl ditekan
+	UserInputService.InputBegan:Fire({
+		UserInputType = Enum.UserInputType.Keyboard,
+		KeyCode = Enum.KeyCode.LeftControl
+	}, false)
 end)
