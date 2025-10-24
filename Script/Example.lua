@@ -259,7 +259,7 @@ Fluent:Notify({
 -- which has been marked to be one that auto loads!
 SaveManager:LoadAutoloadConfig()
 
---// MOBILE SHOW/HIDE BUTTON
+--// MOBILE SHOW/HIDE BUTTON (FIXED)
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 
@@ -276,18 +276,25 @@ ToggleButton.Parent = ToggleGui
 ToggleButton.Size = UDim2.new(0, 80, 0, 40)
 ToggleButton.Position = UDim2.new(1, -100, 1, -60)
 ToggleButton.AnchorPoint = Vector2.new(0, 0)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.Text = "Hide"
 ToggleButton.TextSize = 18
 ToggleButton.AutoButtonColor = true
 ToggleButton.Active = true
-ToggleButton.Draggable = true -- Bisa digeser di layar HP
+ToggleButton.Draggable = true -- bisa digeser
 
+-- Simpan status tampilan
 local UIVisible = true
 
 ToggleButton.MouseButton1Click:Connect(function()
-    UIVisible = not UIVisible
-    Window.Enabled = UIVisible
-    ToggleButton.Text = UIVisible and "Hide" or "Show"
+	UIVisible = not UIVisible
+
+	if UIVisible then
+		Window:Show()        -- tampilkan kembali UI Fluent
+		ToggleButton.Text = "Hide"
+	else
+		Window:Minimize()    -- sembunyikan UI Fluent
+		ToggleButton.Text = "Show"
+	end
 end)
