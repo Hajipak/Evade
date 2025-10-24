@@ -1,6 +1,6 @@
 --BUTTONS KEYBIND
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Top%20bar.lua'))()
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/evade%20leaderboard%20button.lua'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Evade%20leaderboard.lua'))()
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Reload%20and%20Front%20camera.lua'))()
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/Evade%20Zoom%20Button.lua'))()
 -- loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Padding%20space.lua'))()
@@ -221,6 +221,7 @@ autoSaveConfig()
 ]]
 
 --no way you falling for that ðŸ’€
+
 
 
 
