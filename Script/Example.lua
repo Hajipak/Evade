@@ -258,3 +258,36 @@ Fluent:Notify({
 -- You can use the SaveManager:LoadAutoloadConfig() to load a config
 -- which has been marked to be one that auto loads!
 SaveManager:LoadAutoloadConfig()
+
+--// MOBILE SHOW/HIDE BUTTON
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:FindFirstChildOfClass("PlayerGui") or Instance.new("ScreenGui", CoreGui)
+
+local ToggleGui = Instance.new("ScreenGui")
+ToggleGui.Name = "FluentToggleUI"
+ToggleGui.Parent = PlayerGui
+ToggleGui.ResetOnSpawn = false
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Parent = ToggleGui
+ToggleButton.Size = UDim2.new(0, 80, 0, 40)
+ToggleButton.Position = UDim2.new(1, -100, 1, -60)
+ToggleButton.AnchorPoint = Vector2.new(0, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Text = "Hide"
+ToggleButton.TextSize = 18
+ToggleButton.AutoButtonColor = true
+ToggleButton.Active = true
+ToggleButton.Draggable = true -- Bisa digeser di layar HP
+
+local UIVisible = true
+
+ToggleButton.MouseButton1Click:Connect(function()
+    UIVisible = not UIVisible
+    Window.Enabled = UIVisible
+    ToggleButton.Text = UIVisible and "Hide" or "Show"
+end)
