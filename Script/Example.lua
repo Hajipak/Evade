@@ -7,12 +7,109 @@ local Window = Fluent:CreateWindow({
     SubTitle = "by dawid",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
-    Acrylic = true, -- The blur may be detectable, setting this to false disables blur entirely
+    Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl -- Used when theres no MinimizeKeybind
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
---Fluent provides Lucide Icons https://lucide.dev/icons/ for the tabs, icons are optional
+-- Toggle Button untuk Show/Hide UI
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+-- Buat ScreenGui untuk toggle button
+local ToggleScreenGui = Instance.new("ScreenGui")
+ToggleScreenGui.Name = "ToggleUI"
+ToggleScreenGui.ResetOnSpawn = false
+ToggleScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ToggleScreenGui.Parent = PlayerGui
+
+-- Buat Toggle Button
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Size = UDim2.new(0, 60, 0, 60)
+ToggleButton.Position = UDim2.new(0, 10, 0.5, -30)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+ToggleButton.BorderSizePixel = 0
+ToggleButton.Text = "🔳"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 30
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Parent = ToggleScreenGui
+
+-- Tambahkan UICorner untuk rounded edges
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = ToggleButton
+
+-- Tambahkan UIStroke untuk border
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(100, 100, 100)
+UIStroke.Thickness = 2
+UIStroke.Parent = ToggleButton
+
+-- Variable untuk track UI state
+local UIVisible = true
+
+-- Fungsi untuk toggle UI
+local function toggleUI()
+    UIVisible = not UIVisible
+    if Window and Window.Root then
+        Window.Root.Visible = UIVisible
+    end
+    
+    -- Update button icon
+    if UIVisible then
+        ToggleButton.Text = "🔳"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    else
+        ToggleButton.Text = "📱"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(65, 65, 65)
+    end
+end
+
+-- Click event
+ToggleButton.MouseButton1Click:Connect(toggleUI)
+
+-- Drag functionality untuk mobile dan PC
+local UserInputService = game:GetService("UserInputService")
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    ToggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+ToggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = ToggleButton.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+ToggleButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Fluent provides Lucide Icons https://lucide.dev/icons/ for the tabs, icons are optional
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
@@ -24,18 +121,14 @@ do
     Fluent:Notify({
         Title = "Notification",
         Content = "This is a notification",
-        SubContent = "SubContent", -- Optional
-        Duration = 5 -- Set to nil to make the notification not disappear
+        SubContent = "SubContent",
+        Duration = 5
     })
-
-
 
     Tabs.Main:AddParagraph({
         Title = "Paragraph",
         Content = "This is a paragraph.\nSecond line!"
     })
-
-
 
     Tabs.Main:AddButton({
         Title = "Button",
@@ -62,8 +155,6 @@ do
         end
     })
 
-
-
     local Toggle = Tabs.Main:AddToggle("MyToggle", {Title = "Toggle", Default = false })
 
     Toggle:OnChanged(function()
@@ -72,8 +163,6 @@ do
 
     Options.MyToggle:SetValue(false)
 
-
-    
     local Slider = Tabs.Main:AddSlider("Slider", {
         Title = "Slider",
         Description = "This is a slider",
@@ -92,8 +181,6 @@ do
 
     Slider:SetValue(3)
 
-
-
     local Dropdown = Tabs.Main:AddDropdown("Dropdown", {
         Title = "Dropdown",
         Values = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen"},
@@ -107,8 +194,6 @@ do
         print("Dropdown changed:", Value)
     end)
 
-
-    
     local MultiDropdown = Tabs.Main:AddDropdown("MultiDropdown", {
         Title = "Dropdown",
         Description = "You can select multiple values.",
@@ -131,8 +216,6 @@ do
         print("Mutlidropdown changed:", table.concat(Values, ", "))
     end)
 
-
-
     local Colorpicker = Tabs.Main:AddColorpicker("Colorpicker", {
         Title = "Colorpicker",
         Default = Color3.fromRGB(96, 205, 255)
@@ -143,8 +226,6 @@ do
     end)
     
     Colorpicker:SetValueRGB(Color3.fromRGB(0, 255, 140))
-
-
 
     local TColorpicker = Tabs.Main:AddColorpicker("TransparencyColorpicker", {
         Title = "Colorpicker",
@@ -160,26 +241,18 @@ do
         )
     end)
 
-
-
     local Keybind = Tabs.Main:AddKeybind("Keybind", {
         Title = "KeyBind",
-        Mode = "Toggle", -- Always, Toggle, Hold
-        Default = "LeftControl", -- String as the name of the keybind (MB1, MB2 for mouse buttons)
-
-        -- Occurs when the keybind is clicked, Value is `true`/`false`
+        Mode = "Toggle",
+        Default = "LeftControl",
         Callback = function(Value)
             print("Keybind clicked!", Value)
         end,
-
-        -- Occurs when the keybind itself is changed, `New` is a KeyCode Enum OR a UserInputType Enum
         ChangedCallback = function(New)
             print("Keybind changed!", New)
         end
     })
 
-    -- OnClick is only fired when you press the keybind and the mode is Toggle
-    -- Otherwise, you will have to use Keybind:GetState()
     Keybind:OnClick(function()
         print("Keybind clicked:", Keybind:GetState())
     end)
@@ -191,26 +264,22 @@ do
     task.spawn(function()
         while true do
             wait(1)
-
-            -- example for checking if a keybind is being pressed
             local state = Keybind:GetState()
             if state then
                 print("Keybind is being held down")
             end
-
             if Fluent.Unloaded then break end
         end
     end)
 
-    Keybind:SetValue("MB2", "Toggle") -- Sets keybind to MB2, mode to Hold
-
+    Keybind:SetValue("MB2", "Toggle")
 
     local Input = Tabs.Main:AddInput("Input", {
         Title = "Input",
         Default = "Default",
         Placeholder = "Placeholder",
-        Numeric = false, -- Only allows numbers
-        Finished = false, -- Only calls callback when you press enter
+        Numeric = false,
+        Finished = false,
         Callback = function(Value)
             print("Input changed:", Value)
         end
@@ -221,31 +290,14 @@ do
     end)
 end
 
-
--- Addons:
--- SaveManager (Allows you to have a configuration system)
--- InterfaceManager (Allows you to have a interface managment system)
-
--- Hand the library over to our managers
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
-
--- Ignore keys that are used by ThemeManager.
--- (we dont want configs to save themes, do we?)
 SaveManager:IgnoreThemeSettings()
-
--- You can add indexes of elements the save manager should ignore
 SaveManager:SetIgnoreIndexes({})
-
--- use case for doing it this way:
--- a script hub could have themes in a global folder
--- and game configs in a separate folder per game
 InterfaceManager:SetFolder("FluentScriptHub")
 SaveManager:SetFolder("FluentScriptHub/specific-game")
-
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
-
 
 Window:SelectTab(1)
 
@@ -255,37 +307,4 @@ Fluent:Notify({
     Duration = 8
 })
 
--- You can use the SaveManager:LoadAutoloadConfig() to load a config
--- which has been marked to be one that auto loads!
 SaveManager:LoadAutoloadConfig()
-
---// MOBILE TOGGLE BUTTON (SIMULATE LEFT CONTROL)
-local UserInputService = game:GetService("UserInputService")
-local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
-
-local Player = Players.LocalPlayer
-local PlayerGui = Player:FindFirstChildOfClass("PlayerGui") or Instance.new("ScreenGui", CoreGui)
-
-local ToggleGui = Instance.new("ScreenGui")
-ToggleGui.Name = "FluentMobileToggle"
-ToggleGui.ResetOnSpawn = false
-ToggleGui.Parent = PlayerGui
-
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Parent = ToggleGui
-ToggleButton.Size = UDim2.new(0, 80, 0, 40)
-ToggleButton.Position = UDim2.new(1, -100, 1, -60)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Text = "Toggle"
-ToggleButton.TextSize = 18
-ToggleButton.Draggable = true
-
-ToggleButton.MouseButton1Click:Connect(function()
-	-- Simulasikan LeftControl ditekan
-	UserInputService.InputBegan:Fire({
-		UserInputType = Enum.UserInputType.Keyboard,
-		KeyCode = Enum.KeyCode.LeftControl
-	}, false)
-end)
