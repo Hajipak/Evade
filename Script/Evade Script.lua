@@ -1177,11 +1177,12 @@ end)
 Window:SelectTab(1)
 
 Fluent:Notify({
-    Title = "Dara Hub - Evade",
+    Title = "Zen Hub - Evade",
     Content = "Script loaded successfully! Use the toggle button to show/hide UI.",
     Duration = 5
 })
 
 -- Load autosave config
 SaveManager:LoadAutoloadConfig()
+
 
