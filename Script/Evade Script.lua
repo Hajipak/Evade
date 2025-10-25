@@ -1,8 +1,7 @@
-[file content]
-if getgenv().DaraHubEvadeExecuted then
+if getgenv().ZenHubEvadeExecuted then
     return
 end
-getgenv().DaraHubEvadeExecuted = true
+getgenv().ZenHubEvadeExecuted = true
 
 -- Load Fluent UI
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,8 +9,8 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 local Window = Fluent:CreateWindow({
-    Title = "Dara Hub - Evade",
-    SubTitle = "Made by: Pnsdg And Yomka",
+    Title = "Zen Hub - Evade",
+    SubTitle = "Made by: Zen",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
@@ -218,8 +217,8 @@ local interactEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("Cha
 -- Main Tab
 do
     Tabs.Main:AddParagraph({
-        Title = "Dara Hub - Evade",
-        Content = "Made by: Pnsdg And Yomka\nVersion: 1.2"
+        Title = "Zen Hub - Evade",
+        Content = "Made by: Zen\nVersion: 1.2"
     })
 
     local placeName = "Unknown"
@@ -1185,3 +1184,4 @@ Fluent:Notify({
 
 -- Load autosave config
 SaveManager:LoadAutoloadConfig()
+
