@@ -2346,20 +2346,6 @@ local function rejoinServer()
     TeleportService:TeleportToPlaceInstance(placeId, jobId)
 end
 
-    local FeatureSection = Window:Section({ Title = "loc:FEATURES", Opened = true })
-
-    local Tabs = {
-    Main = FeatureSection:Tab({ Title = "Main", Icon = "layout-grid" }),
-    Player = FeatureSection:Tab({ Title = "loc:Player_TAB", Icon = "user" }),
-    Auto = FeatureSection:Tab({ Title = "loc:AUTO_TAB", Icon = "repeat-2" }),
-    Visuals = FeatureSection:Tab({ Title = "loc:VISUALS_TAB", Icon = "camera" }),
-    ESP = FeatureSection:Tab({ Title = "loc:ESP_TAB", Icon = "eye" }),
-    Utility = FeatureSection:Tab({ Title = "Utility", Icon = "wrench"}),
-    Teleport = FeatureSection:Tab({ Title = "Teleport", Icon = "navigation" }),
-    Settings = FeatureSection:Tab({ Title = "loc:SETTINGS_TAB", Icon = "settings" })
-    
-}
-
 
 -- Main Tab
 Tabs.Main:Section({ Title = "Server Info", TextSize = 20 })
@@ -2373,51 +2359,62 @@ if success and productInfo then
     placeName = productInfo.Name
 end
 
-Tabs.Main:Paragraph({
-    Title = "Game Mode",
-    Desc = placeName
-})
+Tabs.Main:AddParagraph({
+        Title = "Game mode",
+        Content = placeName
+    })
 
-Tabs.Main:Button({
-    Title = "Copy Server Link",
-    Desc = "Copy the current server's join link",
-    Icon = "link",
-    Callback = function()
-        local serverLink = getServerLink()
-        pcall(function()
-            setclipboard(serverLink)
-        end)
-        WindUI:Notify({
-                Icon = "link",
-                Title = "Link Copied",
-                Content = "The server invite link has been copied to your clipborad",
-                Duration = 3
-        })
-    end
-})
+Tabs.Main:AddButton({
+        Title = "Copy Server Link",
+        Description = "Copy the current server's join link",
+        Callback = function()
+            local serverLink = getServerLink()
+            pcall(function()
+                setclipboard(serverLink)
+            end)
+            Window:Dialog({
+                Title = "Copy Link",
+                Content = "This is just a copy link",
+                Buttons = {
+                    {
+                        Title = "Link Copied",
+                        Callback = function()
+                            print("The server invite link has been copied to your clipborad")
+                        end
+                    },
+                    {
+                        Title = "Link Not Copied",
+                        Callback = function()
+                            print("Error")
+                        end
+                    }
+                }
+            })
+        end
+    })
 
 local numPlayers = #Players:GetPlayers()
 local maxPlayers = Players.MaxPlayers
 
-Tabs.Main:Paragraph({
-    Title = "Current Players",
-    Desc = numPlayers .. " / " .. maxPlayers
+Tabs.Main:AddParagraph({
+        Title = "Current Players",
+        Content = numPlayers .. " / " .. maxPlayers
 })
 
-Tabs.Main:Paragraph({
-    Title = "Server ID",
-    Desc = jobId
+Tabs.Main:AddParagraph({
+        Title = "Server ID",
+        Content = jobId
 })
 
-Tabs.Main:Paragraph({
-    Title = "Place ID",
-    Desc = tostring(placeId)
+Tabs.Main:AddParagraph({
+        Title = "Place ID",
+        Content = tostring(placeId)
 })
 
 Tabs.Main:Section({ Title = "Server Tools", TextSize = 20 })
 Tabs.Main:Divider()
 
-Tabs.Main:Button({
+Tabs.Main:AddButton({
     Title = "Rejoin",
     Desc = "Rejoin the current server",
     Icon = "refresh-cw",
@@ -2426,7 +2423,7 @@ Tabs.Main:Button({
     end
 })
 
-Tabs.Main:Button({
+Tabs.Main:AddButton({
     Title = "Server Hop",
     Desc = "Hop to a random server",
     Icon = "shuffle",
@@ -2435,7 +2432,7 @@ Tabs.Main:Button({
     end
 })
 
-Tabs.Main:Button({
+Tabs.Main:AddButton({
     Title = "Hop to Small Server",
     Desc = "Hop to the smallest available server",
     Icon = "minimize",
@@ -2444,7 +2441,7 @@ Tabs.Main:Button({
     end
 })
 
-Tabs.Main:Button({
+Tabs.Main:AddButton({
        Title = "Advanced Server Hop",
        Desc = "Finding a Server inside your game",
        Icon = "server",
@@ -2467,9 +2464,9 @@ Tabs.Main:Button({
            end
        end
    })
-   Tabs.Main:Section({ Title = "Misc", TextSize = 20 })
-   Tabs.Main:Divider()
-   Tabs.Main:Button({
+   Tabs.Main:AddSection({ Title = "Misc", TextSize = 20 })
+   Tabs.Main:AddDivider()
+   Tabs.Main:AddButton({
     Title = "Show/Hide Reload button",
     Desc = "This button allow you to use front view mode without keyboard or any tool in vip server",
     Icon = "switch-camera",
