@@ -5842,7 +5842,7 @@ if player.Character then
 end
 
 --[[the part of loadstring prevent error]]
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/More-Loadstrings.lua'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua'))()
 
                 local securityPart = Instance.new("Part")
                 securityPart.Name = "SecurityPart"
