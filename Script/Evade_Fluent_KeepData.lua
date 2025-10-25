@@ -1,372 +1,30 @@
--- Evade_Fluent_KeepData.lua
--- This file preserves the original Evade script (unchanged) but disables WindUI (safe stubs)
--- and then builds a Fluent UI overlay that maps to the original script's variables (featureStates).
--- Goal: keep ALL original data, logic, and functions intact, only replace UI with Fluent.
--- If the original script already defined featureStates or UI, our stubs avoid runtime errors
--- and Fluent UI binds to the same globals so behavior is preserved.
--- NOTE: executor must allow HTTP requests to load Fluent resources used below.
-
--- Safe WindUI stub to prevent the original UI code from creating/throwing errors.
--- The stub captures common calls and returns objects with no-op methods so the original script runs.
-if not _G.__WINDUI_STUB_LOADED then
-    _G.__WINDUI_STUB_LOADED = true
-    local function noop() end
-    local function identity(...) return ... end
-
-    local StubElement = {}
-    function StubElement:OnChanged() end
-    function StubElement:OnClick() end
-    function StubElement:OnSelected() end
-    function StubElement:AddButton() return StubElement end
-    function StubElement:AddToggle() return StubElement end
-    function StubElement:AddSlider() return StubElement end
-    function StubElement:AddDropdown() return StubElement end
-    function StubElement:AddSection() return StubElement end
-    function StubElement:AddDivider() return StubElement end
-    function StubElement:AddParagraph() return StubElement end
-    function StubElement:SetValue() return StubElement end
-    function StubElement:GetValue() return nil end
-    function StubElement:OnChanged() return StubElement end
-    function StubElement:OnClick() return StubElement end
-
-    WindUI = WindUI or {}
-    function WindUI:CreateWindow(...) 
-        -- return a table that mimics expected API
-        local win = {}
-        function win:AddTab() return StubElement end
-        function win:AddSection() return StubElement end
-        function win:AddToggle() return StubElement end
-        function win:AddButton() return StubElement end
-        function win:AddSlider() return StubElement end
-        function win:AddDropdown() return StubElement end
-        function win:AddKeybind() return StubElement end
-        function win:AddParagraph() return StubElement end
-        function win:AddDivider() return StubElement end
-        function win:SelectTab() end
-        function win:Toggle() end
-        win.Container = { Visible = true }
-        return win
-    end
-
-    -- If the original script refers to SaveManager or InterfaceManager provided by WindUI, stub them too.
-    SaveManager = SaveManager or {
-        Save = function() end,
-        Load = function() end,
-        SetFolder = function() end,
-        CreateConfig = function() end
-    }
-    InterfaceManager = InterfaceManager or {
-        BuildInterfaceSection = function() end,
-        SetFolder = function() end
-    }
-end
-
--- Now include the original script content (unchanged).
 if getgenv().ZenHubEvadeExecuted then
     return
 end
 getgenv().ZenHubEvadeExecuted = true
--- Load WindUI
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
--- Localization setup
-local Localization = WindUI:Localization({
-    Enabled = true,
-    Prefix = "loc:",
-    DefaultLanguage = "en",
-    Translations = {
-        ["en"] = {
-            ["SCRIPT_TITLE"] = "Zen Hub",
-            ["WELCOME"] = "Made by: Pnsdg And Yomka and Zen",
-            ["FEATURES"] = "Features",
-            ["Player_TAB"] = "Player",
-            ["AUTO_TAB"] = "Auto",
-            ["VISUALS_TAB"] = "Visuals",
-            ["ESP_TAB"] = "ESP",
-            ["SETTINGS_TAB"] = "Settings",
-            ["INFINITE_JUMP"] = "Infinite Jump",
-            ["JUMP_METHOD"] = "Infinite Jump Method",
-            ["FLY"] = "Fly",
-            ["FLY_SPEED"] = "Fly Speed",
-            ["TPWALK"] = "TP WALK",
-            ["TPWALK_VALUE"] = "TPWALK VALUE",
-            ["JUMP_HEIGHT"] = "Jump Height",
-            ["JUMP_POWER"] = "Jump Height",
-            ["ANTI_AFK"] = "Anti AFK",
-            ["FULL_BRIGHT"] = "FullBright",
-            ["NO_FOG"] = "Remove Fog",
-            ["PLAYER_NAME_ESP"] = "Player Name ESP",
-            ["PLAYER_BOX_ESP"] = "Player Box ESP",
-            ["PLAYER_TRACER"] = "Player Tracer",
-            ["PLAYER_DISTANCE_ESP"] = "Player Distance ESP",
-            ["PLAYER_RAINBOW_BOXES"] = "Player Rainbow Boxes",
-            ["PLAYER_RAINBOW_TRACERS"] = "Player Rainbow Tracers",
-            ["NEXTBOT_ESP"] = "Nextbot ESP",
-            ["NEXTBOT_NAME_ESP"] = "Nextbot Name ESP",
-            ["DOWNED_BOX_ESP"] = "Downed Player Box ESP",
-            ["DOWNED_TRACER"] = "Downed Player Tracer",
-            ["DOWNED_NAME_ESP"] = "Downed Player Name ESP",
-            ["DOWNED_DISTANCE_ESP"] = "Downed Player Distance ESP",
-            ["AUTO_CARRY"] = "Auto Carry",
-            ["AUTO_REVIVE"] = "Auto Revive",
-            ["AUTO_VOTE"] = "Auto Vote",
-            ["AUTO_VOTE_MAP"] = "Auto Vote Map",
-            ["AUTO_SELF_REVIVE"] = "Auto Self Revive",
-            ["MANUAL_REVIVE"] = "Manual Revive",
-            ["AUTO_WIN"] = "Auto Win",
-            ["AUTO_MONEY_FARM"] = "Auto Money Farm",
-            ["SAVE_CONFIG"] = "Save Configuration",
-            ["LOAD_CONFIG"] = "Load Configuration",
-            ["THEME_SELECT"] = "Select Theme",
-            ["TRANSPARENCY"] = "Window Transparency"
-        }
-    }
-})
+-- Load Fluent
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
--- Set WindUI properties
-WindUI.TransparencyValue = 0.2
-WindUI:SetTheme("Dark")
-
--- Create WindUI window
-local Window = WindUI:CreateWindow({
-    Title = "loc:SCRIPT_TITLE",
-    Icon = "rocket",
-    Author = "loc:WELCOME",
-    Folder = "GameHackUI",
-    Size = UDim2.fromOffset(580, 490),
+-- Create Fluent window
+local Window = Fluent:CreateWindow({
+    Title = "Zen Hub v1.2",
+    SubTitle = "Made by: Pnsdg, Yomka and Zen",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
     Theme = "Dark",
-    HidePanelBackground = false,
-    Acrylic = false,
-    HideSearchBar = false,
-    SideBarWidth = 200
+    MinimizeKey = Enum.KeyCode.RightControl
 })
-local isWindowOpen = false
-local function updateWindowOpenState()
-    if Window and type(Window.IsOpen) == "function" then
-        local ok, val = pcall(function() return Window:IsOpen() end)
-        if ok and type(val) == "boolean" then
-            isWindowOpen = val
-            return
-        end
-    end
-    if Window and Window.Opened ~= nil then
-        isWindowOpen = Window.Opened
-        return
-    end
-    isWindowOpen = isWindowOpen or false
-end
 
-pcall(updateWindowOpenState)
+local Options = Fluent.Options
+
 featureStates = featureStates or {}
 if featureStates.DisableCameraShake == nil then
     featureStates.DisableCameraShake = false
 end
-local currentKey = Enum.KeyCode.RightControl 
-local keyConnection = nil
-local isListeningForInput = false
-local keyInputConnection = nil
-
-local keyBindButton = nil
-
-local keybindFile = "keybind_config.txt"
-
-local function getCleanKeyName(keyCode)
-    local keyString = tostring(keyCode)
-    return keyString:gsub("Enum%.KeyCode%.", "")
-end
-
-local function saveKeybind()
-    local keyString = tostring(currentKey)
-    writefile(keybindFile, keyString)
-end
-
-local function loadKeybind()
-    if isfile(keybindFile) then
-        local savedKey = readfile(keybindFile)
-        for _, key in pairs(Enum.KeyCode:GetEnumItems()) do
-            if tostring(key) == savedKey then
-                currentKey = key
-                return true
-            end
-        end
-    end
-    return false
-end
-
-loadKeybind()
-
-local function updateKeybindButtonDesc()
-    if not keyBindButton then return false end
-    local desc = "Current Key: " .. getCleanKeyName(currentKey)
-    local success = false
-
-    local methods = {
-        function()
-            if type(keyBindButton.SetDesc) == "function" then
-                keyBindButton:SetDesc(desc)
-            else
-                error("no SetDesc")
-            end
-        end,
-        function()
-            if type(keyBindButton.Set) == "function" then
-                keyBindButton:Set("Desc", desc)
-            else
-                error("no Set")
-            end
-        end,
-        function()
-            if keyBindButton.Desc ~= nil then
-                keyBindButton.Desc = desc
-            else
-                error("no Desc property")
-            end
-        end,
-        function()
-            if type(keyBindButton.SetDescription) == "function" then
-                keyBindButton:SetDescription(desc)
-            else
-                error("no SetDescription")
-            end
-        end,
-        function()
-            if type(keyBindButton.SetValue) == "function" then
-                keyBindButton:SetValue(desc)
-            else
-                error("no SetValue")
-            end
-        end
-    }
-
-    for _, fn in ipairs(methods) do
-        local ok = pcall(fn)
-        if ok then
-            success = true
-            break
-        end
-    end
-
-    if not success then
-        pcall(function()
-            WindUI:Notify({
-                Title = "Keybind",
-                Content = desc,
-                Duration = 2
-            })
-        end)
-    end
-
-    return success
-end
-
-local function bindKey(keyBindButtonParam)
-    local targetButton = keyBindButtonParam or keyBindButton
-
-    if isListeningForInput then 
-        isListeningForInput = false
-        if keyConnection then
-            keyConnection:Disconnect()
-            keyConnection = nil
-        end
-        WindUI:Notify({
-            Title = "Keybind",
-            Content = "Key binding cancelled",
-            Duration = 2
-        })
-        return
-    end
-    
-    isListeningForInput = true
-    WindUI:Notify({
-        Title = "Keybind",
-        Content = "Press any key to bind...",
-        Duration = 3
-    })
-    
-    keyConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            currentKey = input.KeyCode
-            isListeningForInput = false
-            if keyConnection then
-                keyConnection:Disconnect()
-                keyConnection = nil
-            end
-            
-            saveKeybind()
-            
-            WindUI:Notify({
-                Title = "Keybind",
-                Content = "Key bound to: " .. getCleanKeyName(currentKey),
-                Duration = 3
-            })
-            pcall(function()
-                updateKeybindButtonDesc()
-            end)
-        end
-    end)
-end
-
-local function handleKeyPress(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == currentKey then
-        local success, isVisible = pcall(function()
-            if Window and type(Window.IsOpen) == "function" then
-                return Window:IsOpen()
-            elseif Window and Window.Opened ~= nil then
-                return Window.Opened
-            else
-                return isWindowOpen
-            end
-        end)
-        if not success then
-            isVisible = isWindowOpen
-        end
-
-        if isVisible then
-            if Window and type(Window.Close) == "function" then
-                pcall(function() Window:Close() end)
-            else
-                isWindowOpen = false
-                if Window and type(Window.OnClose) == "function" then
-                    pcall(function() Window:OnClose() end)
-                end
-            end
-        else
-            if Window and type(Window.Open) == "function" then
-                pcall(function() Window:Open() end)
-            else
-                isWindowOpen = true
-                if Window and type(Window.OnOpen) == "function" then
-                    pcall(function() Window:OnOpen() end)
-                end
-            end
-        end
-    end
-end
-
-keyInputConnection = game:GetService("UserInputService").InputBegan:Connect(handleKeyPress)
-Window:SetIconSize(48)
-Window:Tag({
-    Title = "v1.2",
-    Color = Color3.fromHex("#30ff6a")
-})
-
-
---[[
-
--- Disabled fucking beta skid
-Window:Tag({
-Title = "Beta",
-Color = Color3.fromHex("#315dff")
-
-]]
-
-Window:CreateTopbarButton("theme-switcher", "moon", function()
-    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Light" or "Dark")
-end, 990)
 
 -- Services
 local Players = game:GetService("Players")
@@ -2662,23 +2320,22 @@ local function rejoinServer()
     TeleportService:TeleportToPlaceInstance(placeId, jobId)
 end
 
-    local FeatureSection = Window:Section({ Title = "loc:FEATURES", Opened = true })
-
-    local Tabs = {
-    Main = FeatureSection:Tab({ Title = "Main", Icon = "layout-grid" }),
-    Player = FeatureSection:Tab({ Title = "loc:Player_TAB", Icon = "user" }),
-    Auto = FeatureSection:Tab({ Title = "loc:AUTO_TAB", Icon = "repeat-2" }),
-    Visuals = FeatureSection:Tab({ Title = "loc:VISUALS_TAB", Icon = "camera" }),
-    ESP = FeatureSection:Tab({ Title = "loc:ESP_TAB", Icon = "eye" }),
-    Utility = FeatureSection:Tab({ Title = "Utility", Icon = "wrench"}),
-    Settings = FeatureSection:Tab({ Title = "loc:SETTINGS_TAB", Icon = "settings" })
-    
+local Tabs = {
+        Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+        Player = Window:AddTab({ Title = "Player", Icon = "user" }),
+        Auto = Window:AddTab({ Title = "Auto", Icon = "repeat" }),
+        Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
+        ESP = Window:AddTab({ Title = "ESP", Icon = "scan" }),
+        Utility = Window:AddTab({ Title = "Utility", Icon = "wrench" }),
+        Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
 
 -- Main Tab
-Tabs.Main:Section({ Title = "Server Info", TextSize = 20 })
-Tabs.Main:Divider()
+Tabs.Main:AddParagraph({
+    Title = "━━━━━━ Server Info ━━━━━━",
+    Content = ""
+})
 
 local placeName = "Unknown"
 local success, productInfo = pcall(function()
@@ -2688,25 +2345,21 @@ if success and productInfo then
     placeName = productInfo.Name
 end
 
-Tabs.Main:Paragraph({
+Tabs.Main:AddParagraph({
     Title = "Game Mode",
-    Desc = placeName
+    Content = placeName
 })
 
-Tabs.Main:Button({
+Tabs.Main:AddButton({
     Title = "Copy Server Link",
-    Desc = "Copy the current server's join link",
-    Icon = "link",
+    Description = "Copy the current server's join link",
     Callback = function()
         local serverLink = getServerLink()
-        pcall(function()
-            setclipboard(serverLink)
-        end)
-        WindUI:Notify({
-                Icon = "link",
-                Title = "Link Copied",
-                Content = "The server invite link has been copied to your clipborad",
-                Duration = 3
+        setclipboard(serverLink)
+        Fluent:Notify({
+            Title = "Success",
+            Content = "Server link copied!",
+            Duration = 3
         })
     end
 })
@@ -2948,22 +2601,25 @@ if Tabs and Tabs.Player then
         end
     })
 end
-    local InfiniteJumpToggle = Tabs.Player:Toggle({
-        Title = "loc:INFINITE_JUMP",
-        Value = false,
-        Callback = function(state)
-            featureStates.InfiniteJump = state
-        end
-    })
+    local InfiniteJumpToggle = Tabs.Player:AddToggle("InfiniteJump", {
+            Title = "Infinite Jump",
+            Default = false
+})
 
-    local JumpMethodDropdown = Tabs.Player:Dropdown({
-        Title = "loc:JUMP_METHOD",
-        Values = {"Hold", "Spam"},
-        Value = "Hold",
-        Callback = function(value)
-            featureStates.JumpMethod = value
-        end
-    })
+InfiniteJumpToggle:OnChanged(function(Value)
+      featureStates.InfiniteJump = Value
+end)
+
+    local JumpMethodDropdown = Tabs.Player:AddDropdown("JumpMethod", {
+           Title = "Jump Method",
+           Values = {"Hold", "Spam"},
+           Multi = false,
+           Default = "Hold"
+})
+
+JumpMethodDropdown:OnChanged(function(Value)
+           featureStates.JumpMethod = Value
+end)
 
 local infiniteSlideEnabled = false
 local slideFrictionValue = -8
@@ -3139,14 +2795,18 @@ local function onCharacterAdded(newCharacter)
     end
 end
 
-    local FlySpeedSlider = Tabs.Player:Slider({
-        Title = "loc:FLY_SPEED",
-        Value = { Min = 1, Max = 200, Default = 5, Step = 1 },
-                Desc = "Adjust fly speed",
-        Callback = function(value)
-            featureStates.FlySpeed = value
-        end
-    })
+    local FlySpeedSlider = Tabs.Player:AddSlider("FlySpeed", {
+           Title = "Fly Speed",
+           Description = "Adjust fly speed",
+           Default = 5,
+           Min = 1,
+           Max = 200,
+           Rounding = 0
+})
+
+FlySpeedSlider:OnChanged(function(Value)
+        featureStates.FlySpeed = Value
+end)
 local NoclipToggle = Tabs.Player:Toggle({
     Title = "Noclip",
     Desc = "Note: This feature Can make you fall to the void non-stop so be careful what you're doing when toggles this on",
@@ -3241,11 +2901,12 @@ local function createValidatedInput(config)
     end
 end
 
-local SpeedInput = Tabs.Player:Input({
+local SpeedInput = Tabs.Player:AddInput("Speed", {
     Title = "Set Speed",
-    Icon = "speedometer",
+    Default = currentSettings.Speed,
     Placeholder = "Default 1500",
-    Value = currentSettings.Speed,
+    Numeric = true,
+    Finished = true,
     Callback = createValidatedInput({
         field = "Speed",
         min = 1450,
@@ -4954,165 +4615,116 @@ local GravityGUIToggle = Tabs.Utility:Toggle({
         canChangeTheme = true
     end)
 
-    -- Configuration Manager
-    local configName = "default"
-    local configFile = nil
-    local MyPlayerData = {
-        name = player.Name,
-        level = 1,
-        inventory = {}
-    }
+    -- ===== CONFIGURATION MANAGER - FLUENT VERSION =====
+Tabs.Settings:AddParagraph({
+    Title = "Configuration Manager",
+    Content = "Save and load your settings"
+})
 
-    Tabs.Settings:Section({ Title = "Configuration Manager", TextSize = 20 })
-    Tabs.Settings:Section({ Title = "Save and load your settings", TextSize = 16, TextTransparency = 0.25 })
-    Tabs.Settings:Divider()
+-- Setup Fluent Save Manager
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent) 
+SaveManager:IgnoreThemeSettings()
 
-    Tabs.Settings:Input({
-        Title = "Config Name",
-        Value = configName,
-        Callback = function(value)
-            configName = value or "default"
-        end
+InterfaceManager:SetFolder("ZenHub")
+SaveManager:SetFolder("ZenHub/Evade")
+
+-- Auto build config section (auto save/load semua toggle, slider, dropdown)
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+-- Custom data untuk game settings
+local function saveGameSettings()
+    SaveManager:Save("GameSettings", {
+        Speed = currentSettings.Speed,
+        JumpCap = currentSettings.JumpCap,
+        AirStrafeAcceleration = currentSettings.AirStrafeAcceleration,
+        GravityValue = featureStates.GravityValue,
+        CustomGravity = featureStates.CustomGravity
     })
+end
 
-    local ConfigManager = Window.ConfigManager
-    if ConfigManager then
-        ConfigManager:Init(Window)
+local function loadGameSettings()
+    local loaded = SaveManager:Load("GameSettings")
+    if loaded then
+        currentSettings.Speed = loaded.Speed or "1500"
+        currentSettings.JumpCap = loaded.JumpCap or "1"
+        currentSettings.AirStrafeAcceleration = loaded.AirStrafeAcceleration or "187"
+        featureStates.GravityValue = loaded.GravityValue or originalGameGravity
+        featureStates.CustomGravity = loaded.CustomGravity or false
         
-        Tabs.Settings:Button({
-            Title = "loc:SAVE_CONFIG",
-            Icon = "save",
-            Variant = "Primary",
-            Callback = function()
-                configFile = ConfigManager:CreateConfig(configName)
-                configFile:Register("InfiniteJumpToggle", InfiniteJumpToggle)
-                configFile:Register("FreeCamSpeedSlider", FreeCamSpeedSlider)
-                configFile:Register("JumpMethodDropdown", JumpMethodDropdown)
-                configFile:Register("FlyToggle", FlyToggle)
-                configFile:Register("FlySpeedSlider", FlySpeedSlider)
-                configFile:Register("ZoomSlider", ZoomSlider)
-                configFile:Register("TPWALKToggle", TPWALKToggle)
-                configFile:Register("TPWALKSlider", TPWALKSlider)
-                configFile:Register("JumpBoostToggle", JumpBoostToggle)
-                configFile:Register("JumpBoostSlider", JumpBoostSlider)
-                configFile:Register("AntiAFKToggle", AntiAFKToggle)
-                configFile:Register("FullBrightToggle", FullBrightToggle)
-                configFile:Register("PlayerBoxESPToggle", PlayerBoxESPToggle)
-                configFile:Register("PlayerBoxTypeDropdown", PlayerBoxTypeDropdown)
-                configFile:Register("PlayerTracerToggle", PlayerTracerToggle)
-                configFile:Register("PlayerNameESPToggle", PlayerNameESPToggle)
-                configFile:Register("PlayerDistanceESPToggle", PlayerDistanceESPToggle)
-                configFile:Register("PlayerRainbowBoxesToggle", PlayerRainbowBoxesToggle)
-                configFile:Register("PlayerRainbowTracersToggle", PlayerRainbowTracersToggle)
-                configFile:Register("NextbotESPToggle", NextbotESPToggle)
-                configFile:Register("NextbotBoxESPToggle", NextbotBoxESPToggle)
-                configFile:Register("NextbotBoxTypeDropdown", NextbotBoxTypeDropdown)
-                configFile:Register("NextbotTracerToggle", NextbotTracerToggle)
-                configFile:Register("NextbotDistanceESPToggle", NextbotDistanceESPToggle)
-                configFile:Register("NextbotRainbowBoxesToggle", NextbotRainbowBoxesToggle)
-                configFile:Register("NextbotRainbowTracersToggle", NextbotRainbowTracersToggle)
-                configFile:Register("DownedBoxESPToggle", DownedBoxESPToggle)
-                configFile:Register("DownedBoxTypeDropdown", DownedBoxTypeDropdown)
-                configFile:Register("EmoteDropdown", EmoteDropdown)
-configFile:Register("AutoEmoteToggle", AutoEmoteToggle)
- configFile:Register("NoFogToggle", NoFogToggle)
-                configFile:Register("DownedTracerToggle", DownedTracerToggle)
-                configFile:Register("DownedNameESPToggle", DownedNameESPToggle)
-                configFile:Register("DownedDistanceESPToggle", DownedDistanceESPToggle)
-                configFile:Register("AutoCarryToggle", AutoCarryToggle)
-                configFile:Register("AutoReviveToggle", FastReviveToggle)
-                configFile:Register("FastReviveToggle", FastReviveToggle)
-                configFile:Register("AutoVoteDropdown", AutoVoteDropdown)
-                configFile:Register("AutoVoteToggle", AutoVoteToggle)
-                configFile:Register("AutoSelfReviveToggle", AutoSelfReviveToggle)
-                configFile:Register("AutoWinToggle", AutoWinToggle)
-                configFile:Register("TimerDisplayToggle", TimerDisplayToggle)
-                configFile:Register("AutoMoneyFarmToggle", AutoMoneyFarmToggle)
-                configFile:Register("ThemeDropdown", ThemeDropdown)
-                configFile:Register("TransparencySlider", TransparencySlider)
-                configFile:Register("ThemeToggle", ThemeToggle)
-                configFile:Register("SpeedInput", SpeedInput)
-                configFile:Register("AutoWhistleToggle", AutoWhistleToggle)
-                configFile:Register("JumpCapInput", JumpCapInput)
-                configFile:Register("StrafeInput", StrafeInput)
-                configFile:Register("ApplyMethodDropdown", ApplyMethodDropdown)
-                configFile:Register("InfiniteSlideToggle", InfiniteSlideToggle)
-                configFile:Register("GravityToggle", GravityToggle)
-                configFile:Register("GravityInput", GravityInput)
-                configFile:Register("InfiniteSlideSpeedInput", InfiniteSlideSpeedInput)
-                configFile:Register("LagSwitchToggle", LagSwitchToggle)
-                configFile:Register("LagDurationInput", LagDurationInput)
-                configFile:Set("playerData", MyPlayerData)
-                configFile:Set("lastSave", os.date("%Y-%m-%d %H:%M:%S"))
-                configFile:Save()
-            end
-        })
+        -- Apply settings ke game
+        applyStoredSettings()
+        if featureStates.CustomGravity then
+            workspace.Gravity = featureStates.GravityValue
+        end
+    end
+end
 
-        Tabs.Settings:Button({
-            Title = "loc:LOAD_CONFIG",
-            Icon = "folder",
-            Callback = function()
-                configFile = ConfigManager:CreateConfig(configName)
-                local loadedData = configFile:Load()
-                if loadedData then
-                    if loadedData.playerData then
-                        MyPlayerData = loadedData.playerData
-                    end
-                    local lastSave = loadedData.lastSave or "Unknown"
-                    Tabs.Settings:Paragraph({
-                        Title = "Player Data",
-                        Desc = string.format("Name: %s\nLevel: %d\nInventory: %s", 
-                            MyPlayerData.name, 
-                            MyPlayerData.level, 
-                            table.concat(MyPlayerData.inventory, ", "))
-                    })
-                    if loadedData.TimerDisplayToggle then
-    TimerDisplayToggle:Set(loadedData.TimerDisplayToggle)
-end
-if loadedData.FreeCamSpeedSlider then
-    FreeCamSpeedSlider:Set(loadedData.FreeCamSpeedSlider)
-end
-if loadedData.AutoWhistleToggle then AutoWhistleToggle:Set(loadedData.AutoWhistleToggle) end
-if loadedData.GravityToggle then GravityToggle:Set(loadedData.GravityToggle) end
-if loadedData.GravityInput then GravityInput:Set(loadedData.GravityInput) end
-if loadedData.SpeedInput then SpeedInput:Set(loadedData.SpeedInput) end
-if loadedData.JumpCapInput then JumpCapInput:Set(loadedData.JumpCapInput) end
-if loadedData.StrafeInput then StrafeInput:Set(loadedData.StrafeInput) end
-if loadedData.ApplyMethodDropdown then ApplyMethodDropdown:Select(loadedData.ApplyMethodDropdown) end
-if loadedData.InfiniteSlideToggle then InfiniteSlideToggle:Set(loadedData.InfiniteSlideToggle) end
-if loadedData.InfiniteSlideSpeedInput then InfiniteSlideSpeedInput:Set(loadedData.InfiniteSlideSpeedInput) end
-if loadedData.EmoteDropdown then EmoteDropdown:Select(loadedData.EmoteDropdown) end
-if loadedData.AutoEmoteToggle then AutoEmoteToggle:Set(loadedData.AutoEmoteToggle) end
-if loadedData.LagSwitchToggle then LagSwitchToggle:Set(loadedData.LagSwitchToggle) end
-if loadedData.LagDurationInput then LagDurationInput:Set(loadedData.LagDurationInput) end
-                end
-            end
-        })
-    else
-        Tabs.Settings:Paragraph({
-            Title = "Config Manager Not Available",
-            Desc = "This feature requires ConfigManager",
-            Image = "alert-triangle",
-            ImageSize = 20,
-            Color = "White"
+-- Manual save/load buttons
+Tabs.Settings:AddButton({
+    Title = "Save All Settings",
+    Description = "Save UI and game settings",
+    Callback = function()
+        saveGameSettings()
+        SaveManager:SaveAutoloadConfig() -- Save UI config
+        Fluent:Notify({
+            Title = "Settings Saved",
+            Content = "All settings have been saved",
+            Duration = 3
         })
     end
+})
 
-    Tabs.Settings:Section({ Title = "Keybind Settings", TextSize = 20 })
-    Tabs.Settings:Section({ Title = "Change toggle key for GUI", TextSize = 16, TextTransparency = 0.25 })
-    Tabs.Settings:Divider()
+Tabs.Settings:AddButton({
+    Title = "Load All Settings", 
+    Description = "Load UI and game settings",
+    Callback = function()
+        loadGameSettings()
+        SaveManager:LoadAutoloadConfig() -- Load UI config
+        Fluent:Notify({
+            Title = "Settings Loaded",
+            Content = "All settings have been loaded",
+            Duration = 3
+        })
+    end
+})
 
-    keyBindButton = Tabs.Settings:Button({
-        Title = "Keybind",
-        Desc = "Current Key: " .. getCleanKeyName(currentKey),
-        Icon = "key",
-        Variant = "Primary",
-        Callback = function()
-            bindKey(keyBindButton)
+-- Keybind Settings dengan Fluent
+Tabs.Settings:AddParagraph({
+    Title = "Keybind Settings", 
+    Content = "Change toggle key for GUI"
+})
+
+local Keybind = Tabs.Settings:AddKeybind("ToggleKeybind", {
+    Title = "Toggle GUI Keybind",
+    Mode = "Toggle",
+    Default = "RightControl",
+    Callback = function(Value)
+        -- Toggle window
+        if Value then
+            Window:Minimize()
+        else
+            Window:Restore()
         end
-    })
+    end,
+    ChangedCallback = function(New)
+        -- Save keybind change
+        Fluent:Notify({
+            Title = "Keybind Changed",
+            Content = "New keybind: " .. tostring(New),
+            Duration = 3
+        })
+    end
+})
 
-    pcall(updateKeybindButtonDesc)
+-- Load settings ketika script start
+task.spawn(function()
+    task.wait(1)
+    loadGameSettings()
+    SaveManager:LoadAutoloadConfig()
+end)
+
 Tabs.Settings:Section({ Title = "Game Settings (In Beta)", TextSize = 35 })
 Tabs.Settings:Section({ Title = "Note: This is a permanent Changes, it's can be used to pass limit value", TextSize = 15 })
 Tabs.Settings:Divider()
@@ -5860,229 +5472,3 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/he
 
 
 
-
-
-
--- ===== Fluent UI overlay (appended) =====
--- Load Fluent library (adjust URLs if your executor requires different links)
-local success, Fluent = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/library.lua"))()
-end)
-
--- Fallback: if the above URL fails, try an alternate common path used by some Fluent forks.
-if not success or not Fluent then
-    pcall(function()
-        Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/main.lua"))()
-    end)
-end
-
--- If Fluent still not available, create a minimal local UI stub that logs toggles to featureStates.
-if not Fluent then
-    Fluent = {}
-    function Fluent:CreateWindow(opts)
-        -- minimal stub to avoid errors; won't display anything
-        local win = {}
-        function win:AddTab(tab) return win end
-        function win:AddSection() return win end
-        function win:AddToggle() return {OnChanged=function() end, SetValue=function() end} end
-        function win:AddButton() return {OnClick=function() end} end
-        function win:AddSlider() return {OnChanged=function() end, SetValue=function() end} end
-        function win:AddDropdown() return {Callback=function() end, SetValue=function() end} end
-        function win:SelectTab() end
-        function win:Toggle() end
-        win.Container = { Visible = true }
-        return win
-    end
-    function Fluent:Notify(opts) print("[FluentStub] "..(opts and opts.Title or "Notify"), opts and opts.Content or "") end
-end
-
--- Add optional SaveManager & InterfaceManager used by many Fluent setups
-local SaveManager = SaveManager or {}
-local InterfaceManager = InterfaceManager or {}
-
--- Ensure featureStates exists (the original script likely defines it; if not, create a safe default table)
-featureStates = featureStates or featureStates or {
-    AutoWhistle = false,
-    CustomGravity = false,
-    GravityValue = workspace and workspace.Gravity or 196.2,
-    InfiniteJump = false,
-    Fly = false,
-    TPWALK = false,
-    JumpBoost = false,
-    AntiAFK = false,
-    AutoCarry = false,
-    FullBright = false,
-    NoFog = false,
-    AutoVote = false,
-    AutoSelfRevive = false,
-    AutoWin = false,
-    AutoMoneyFarm = false,
-    AutoRevive = false,
-    FastRevive = false,
-    DisableCameraShake = false,
-    PlayerESP = { boxes = false, tracers = false, names = false, distance = false, rainbowBoxes = false, rainbowTracers = false, boxType = "2D" },
-    NextbotESP = { boxes = false, tracers = false, names = false, distance = false, rainbowBoxes = false, rainbowTracers = false, boxType = "2D" },
-    DownedBoxESP = false,
-    DownedTracer = false,
-    DownedNameESP = false,
-    DownedDistanceESP = false,
-    FlySpeed = 5,
-    TpwalkValue = 1,
-    JumpPower = 5,
-    JumpMethod = "Hold",
-    SelectedMap = 1,
-    ZoomValue = 1,
-    TimerDisplay = false
-}
-
--- Create Fluent window and tabs
-local Window = Fluent:CreateWindow({
-    Title = "Zen Hub (Fluent)",
-    SubTitle = "Evade - UI replaced only",
-    Size = UDim2.fromOffset(780, 520),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.RightControl
-})
-
-local Tabs = {
-    Main = Window:AddTab({ Title = "Main", Icon = "layout-grid" }),
-    Player = Window:AddTab({ Title = "Player", Icon = "user" }),
-    Auto = Window:AddTab({ Title = "Auto", Icon = "repeat-2" }),
-    Visuals = Window:AddTab({ Title = "Visuals", Icon = "camera" }),
-    ESP = Window:AddTab({ Title = "ESP", Icon = "eye" }),
-    Utility = Window:AddTab({ Title = "Utility", Icon = "wrench" }),
-    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
-}
-
--- Helpers to bind controls to featureStates
-local function getNested(tbl, path)
-    local cur = tbl
-    for part in string.gmatch(path, "[^.]+") do
-        if not cur then return nil end
-        cur = cur[part]
-    end
-    return cur
-end
-local function setNested(tbl, path, val)
-    local cur = tbl
-    local parts = {}
-    for part in string.gmatch(path, "[^.]+") do table.insert(parts, part) end
-    for i = 1, #parts-1 do
-        cur = cur[parts[i]]
-        if not cur then return end
-    end
-    cur[parts[#parts]] = val
-end
-
-local function addToggle(tab, path, opts)
-    opts = opts or {}
-    local title = opts.Title or path
-    local desc = opts.Desc or ""
-    local default = getNested(featureStates, path)
-    local toggle = tab:AddToggle(path, { Title = title, Description = desc, Default = default and true or false })
-    toggle:OnChanged(function(state)
-        setNested(featureStates, path, state)
-    end)
-    toggle:SetValue(default)
-    return toggle
-end
-
-local function addSlider(tab, key, opts)
-    opts = opts or {}
-    local title = opts.Title or key
-    local min = opts.Min or 0
-    local max = opts.Max or 100
-    local def = featureStates[key] or opts.Default or min
-    local slider = tab:AddSlider(key, { Title = title, Description = opts.Desc or "", Default = def, Min = min, Max = max, Rounding = opts.Step or 1 })
-    slider:OnChanged(function(val)
-        featureStates[key] = val
-    end)
-    slider:SetValue(def)
-    return slider
-end
-
--- Build UI (main controls mapped to featureStates)
-Tabs.Main:AddParagraph({ Title = "Zen Hub (Fluent)", Content = "UI converted to Fluent. Original logic and data preserved." })
-Tabs.Main:AddButton({ Title = "Copy Server Link", Description = "Copy the current server's join link", Icon = "link", Callback = function()
-    local ok, serverLink = pcall(function()
-        if getServerLink then return getServerLink() end
-        return tostring(game.JobId)
-    end)
-    pcall(function() setclipboard(serverLink) end)
-    if Fluent and Fluent.Notify then Fluent:Notify({ Title = "Link Copied", Content = "Server link copied", Duration = 3 }) end
-end })
-
--- Player tab
-Tabs.Player:AddSection({ Title = "Movement" })
-addSlider(Tabs.Player, "FlySpeed", { Title = "Fly Speed", Min = 1, Max = 500, Default = featureStates.FlySpeed or 5, Step = 1 })
-Tabs.Player:AddDivider()
-addToggle(Tabs.Player, "InfiniteJump", { Title = "Infinite Jump" })
-Tabs.Player:AddDropdown("JumpMethod", {
-    Title = "Jump Method",
-    Values = {"Hold","Tap","Toggle"},
-    Multi = false,
-    Default = featureStates.JumpMethod or "Hold",
-    Callback = function(val) featureStates.JumpMethod = val end
-})
-
--- Auto tab
-Tabs.Auto:AddSection({ Title = "Automation" })
-addToggle(Tabs.Auto, "AutoCarry", { Title = "Auto Carry" })
-addToggle(Tabs.Auto, "AutoRevive", { Title = "Auto Revive" })
-addToggle(Tabs.Auto, "AutoWin", { Title = "Auto Win" })
-Tabs.Auto:AddDivider()
-Tabs.Auto:AddButton({ Title = "Start Auto Money Farm", Callback = function() featureStates.AutoMoneyFarm = not featureStates.AutoMoneyFarm end })
-
--- Visuals tab
-Tabs.Visuals:AddSection({ Title = "World" })
-addToggle(Tabs.Visuals, "FullBright", { Title = "FullBright" })
-addToggle(Tabs.Visuals, "NoFog", { Title = "Remove Fog" })
-Tabs.Visuals:AddSlider("Transparency", { Title = "Window Transparency", Description = "Adjust overlay transparency", Default = 0.2, Min = 0, Max = 1, Rounding = 0.05, Callback = function(v) if Fluent then Fluent.Transparency = v end end })
-
--- ESP tab
-Tabs.ESP:AddSection({ Title = "Player ESP" })
-addToggle(Tabs.ESP, "PlayerESP.boxes", { Title = "Player Boxes" })
-addToggle(Tabs.ESP, "PlayerESP.tracers", { Title = "Player Tracers" })
-addToggle(Tabs.ESP, "PlayerESP.names", { Title = "Player Names" })
-addToggle(Tabs.ESP, "PlayerESP.distance", { Title = "Player Distance" })
-Tabs.ESP:AddDivider()
-Tabs.ESP:AddSection({ Title = "Nextbot ESP" })
-addToggle(Tabs.ESP, "NextbotESP.boxes", { Title = "Nextbot Boxes" })
-addToggle(Tabs.ESP, "NextbotESP.tracers", { Title = "Nextbot Tracers" })
-addToggle(Tabs.ESP, "NextbotESP.names", { Title = "Nextbot Names" })
-
--- Utility tab
-Tabs.Utility:AddSection({ Title = "Freecam" })
-local freecamToggle = Tabs.Utility:AddToggle("FreeCamToggle", { Title = "Free Cam UI", Description = "Mobile: toggles a small freecam control overlay", Default = featureStates.FreeCamUI or false })
-freecamToggle:OnChanged(function(state)
-    featureStates.FreeCamUI = state
-end)
-Tabs.Utility:AddDivider()
-Tabs.Utility:AddSlider({ Title = "Free Cam Speed", Description = "Adjust movement speed in Free Cam", Default = featureStates.FlySpeed or 50, Min = 1, Max = 500, Rounding = 1, Callback = function(v) featureStates.FlySpeed = v end })
-
--- Settings tab
-Tabs.Settings:AddSection({ Title = "Configuration" })
-Tabs.Settings:AddButton({ Title = "Save Configuration", Icon = "save", Callback = function()
-    if SaveManager and SaveManager.Save then
-        pcall(function() SaveManager:Save("default") end)
-        if Fluent and Fluent.Notify then Fluent:Notify({ Title = "Config", Content = "Saved config", Duration = 2 }) end
-    else
-        if Fluent and Fluent.Notify then Fluent:Notify({ Title = "Config", Content = "SaveManager not available", Duration = 2 }) end
-    end
-end })
-
-Tabs.Settings:AddButton({ Title = "Load Configuration", Icon = "archive", Callback = function()
-    if SaveManager and SaveManager.Load then
-        pcall(function() SaveManager:Load("default") end)
-        if Fluent and Fluent.Notify then Fluent:Notify({ Title = "Config", Content = "Loaded config", Duration = 2 }) end
-    else
-        if Fluent and Fluent.Notify then Fluent:Notify({ Title = "Config", Content = "SaveManager not available", Duration = 2 }) end
-    end
-end })
-
--- Finalize
-if Fluent and Fluent.Notify then Fluent:Notify({ Title = "Zen Hub", Content = "Fluent UI loaded and bound to original script data.", Duration = 4 }) end
--- Expose window and tabs for compatibility
-getgenv().ZenHubWindow = Window
-getgenv().ZenHubTabs = Tabs
