@@ -1,8 +1,6 @@
-if getgenv().DaraHubEvadeExecuted then
+if getgenv().ZenHubEvadeExecuted then
     return
 end
-getgenv().DaraHubEvadeExecuted = true
-if getgenv().ZenHubEvadeExecuted then return end
 getgenv().ZenHubEvadeExecuted = true
 
 -- Load Fluent and create a compatibility shim so original UI calls (WindUI) still work.
