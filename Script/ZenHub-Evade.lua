@@ -1,12 +1,7 @@
-if getgenv().ZenHubEvadeExecuted then
-    return
-end
-getgenv().ZenHubEvadeExecuted = true
-
 -- Load Fluent and create a compatibility shim so original UI calls (WindUI) still work.
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))() end)
+pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))() end)
 
 -- Create Fluent window (Zen Hub)
 local Window = Fluent:CreateWindow({
@@ -57,7 +52,7 @@ ToggleButton.Size = UDim2.new(0, 60, 0, 60)
 ToggleButton.Position = UDim2.new(0, 10, 0.5, -30)
 ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 ToggleButton.BorderSizePixel = 0
-ToggleButton.Text = "🔳"
+ToggleButton.Text = "ðŸ”³"
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.TextSize = 30
 ToggleButton.Font = Enum.Font.GothamBold
@@ -79,10 +74,10 @@ local function toggleUI()
         Window.Root.Visible = UIVisible
     end
     if UIVisible then
-        ToggleButton.Text = "🔳"
+        ToggleButton.Text = "ðŸ”³"
         ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
     else
-        ToggleButton.Text = "📱"
+        ToggleButton.Text = "ðŸ“±"
         ToggleButton.BackgroundColor3 = Color3.fromRGB(65, 65, 65)
     end
 end
@@ -5840,7 +5835,7 @@ if player.Character then
 end
 
 --[[the part of loadstring prevent error]]
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/More-Loadstrings.lua'))()
 
                 local securityPart = Instance.new("Part")
                 securityPart.Name = "SecurityPart"
