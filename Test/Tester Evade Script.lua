@@ -7,7 +7,7 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 -- Create Fluent window (Evade Hub)
 local Window = Fluent:CreateWindow({
     Title = "Evade Hub",
-    SubTitle = "Made by: Pnsdg And Yomka",
+    SubTitle = "Made by: Zen",
     TabWidth = 160,
     Size = UDim2.fromOffset(620, 520),
     Acrylic = true,
