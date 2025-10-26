@@ -1,73 +1,9 @@
--- Evade Hub UI (auto-converted to Fluent UI)
--- Fluent loader + SaveManager + InterfaceManager
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-
--- Create Fluent window (Evade Hub)
-local Window = Fluent:CreateWindow({
-    Title = "Evade Hub",
-    SubTitle = "Made by: Zen",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(620, 520),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.RightControl
-})
-
--- Expose a minimal compatibility shim so the rest of the original script referencing 'Window' methods won't error.
--- These are best-effort no-op or Fluent-mapped implementations for methods used by the original script.
-if not Window.SetIconSize then
-    function Window:SetIconSize(_) end
-end
-
-if not Window.Tag then
-    function Window:Tag(tbl)
-        -- Fluent doesn't have the same Tag method; add a small label instead
-        -- ignore if Title used repeatedly
-        pcall(function()
-            -- create or update an internal tag label container
-            if not self._tagFrame then
-                local tab = self:AddTab({Title = "Info", Icon = ""})
-                tab:AddParagraph({Title = tbl.Title or "Version", Content = tbl.Title or ""})
-                self._tagFrame = true
-            end
-        end)
-    end
-end
-
-if not Window.CreateTopbarButton then
-    function Window:CreateTopbarButton(id, icon, callback, order)
-        -- create a small button in a special "Topbar" tab
-        pcall(function()
-            if not self._topbarTab then
-                self._topbarTab = self:AddTab({Title = "Topbar", Icon = ""})
-            end
-            -- Add a simple button that triggers the callback when clicked
-            self._topbarTab:AddButton({Title = id, Description = "", Callback = callback})
-        end)
-    end
-end
-
--- Hook SaveManager and InterfaceManager to Fluent
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
-InterfaceManager:SetFolder("EvadeHub")
-SaveManager:SetFolder("EvadeHub/specific-game")
-
--- Utility to create a simple notification via Fluent
-local function Notify(title, content, duration)
-    Fluent:Notify({Title = title, Content = content, Duration = duration or 3})
-end
-
--- end of prelude
-
-
 if getgenv().DaraHubEvadeExecuted then
     return
 end
 getgenv().DaraHubEvadeExecuted = true
+
+-- WindUI removed; Fluent UI will be inserted later.
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -747,6 +683,272 @@ local featureStates = {
     ZoomValue = 1,
     TimerDisplay = false
 }
+
+-- ===== START FLUENT UI INSERT =====
+-- Load Fluent and setup UI mapped to existing variables. This section replaces WindUI UI.
+local ok, Fluent = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+end)
+if not ok or not Fluent then
+    warn("Fluent UI failed to load. UI disabled.")
+else
+    local SaveManager, InterfaceManager
+    pcall(function()
+        SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+        InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+    end)
+
+    local Window = Fluent:CreateWindow({
+        Title = "Dara Hub",
+        SubTitle = "Evade - Fluent UI",
+        TabWidth = 160,
+        Size = UDim2.fromOffset(600, 500),
+        Acrylic = true,
+        Theme = "Dark",
+        MinimizeKey = Enum.KeyCode.LeftControl
+    })
+
+    local Tabs = {
+        Player = Window:AddTab({ Title = "Player", Icon = "user" }),
+        Auto = Window:AddTab({ Title = "Auto", Icon = "zap" }),
+        Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
+        ESP = Window:AddTab({ Title = "ESP", Icon = "target" }),
+        Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+    }
+
+    local Options = Fluent.Options
+
+    -- Helper safe pcall
+    local safeCall = function(f, ...)
+        if type(f) == "function" then
+            pcall(f, ...)
+            return true
+        end
+        return false
+    end
+
+    -- PLAYER TAB
+    do
+        local T = Tabs.Player
+
+        local infJumpToggle = T:AddToggle("InfiniteJump", {
+            Title = "Infinite Jump",
+            Default = featureStates and featureStates.InfiniteJump or false
+        })
+        infJumpToggle:OnChanged(function(val)
+            if featureStates then featureStates.InfiniteJump = val end
+            pcall(function() if _G.ToggleInfiniteJump then _G.ToggleInfiniteJump(val) end end)
+        end)
+
+        local flyToggle = T:AddToggle("Fly", {
+            Title = "Fly",
+            Default = featureStates and featureStates.Fly or false
+        })
+        flyToggle:OnChanged(function(val)
+            if featureStates then featureStates.Fly = val end
+            pcall(function() if _G.SetFly then _G.SetFly(val) end end)
+        end)
+
+        local flySpeed = T:AddSlider("FlySpeed", {
+            Title = "Fly Speed",
+            Description = "Adjust fly speed",
+            Default = featureStates and featureStates.FlySpeed or 5,
+            Min = 1,
+            Max = 50,
+            Rounding = 1,
+            Callback = function(v)
+                if featureStates then featureStates.FlySpeed = v end
+                pcall(function() if _G.UpdateFlySpeed then _G.UpdateFlySpeed(v) end end)
+            end
+        })
+
+        local jumpPower = T:AddSlider("JumpPower", {
+            Title = "Jump Power",
+            Default = featureStates and featureStates.JumpPower or 5,
+            Min = 0,
+            Max = 50,
+            Rounding = 1
+        })
+        jumpPower:OnChanged(function(v)
+            if featureStates then featureStates.JumpPower = v end
+        end)
+
+        local jumpMethod = T:AddDropdown("JumpMethod", {
+            Title = "Jump Method",
+            Values = {"Hold", "Toggle", "Auto"},
+            Multi = false,
+            Default = 1
+        })
+        if featureStates and featureStates.JumpMethod then
+            jumpMethod:SetValue(featureStates.JumpMethod)
+        end
+        jumpMethod:OnChanged(function(v) if featureStates then featureStates.JumpMethod = v end end)
+
+        local tpToggle = T:AddToggle("TPWalk", { Title = "TP WALK", Default = featureStates and featureStates.TPWALK or false })
+        tpToggle:OnChanged(function(v) if featureStates then featureStates.TPWALK = v end end)
+
+        local tpVal = T:AddSlider("TpWalkValue", {
+            Title = "TPWalk Value",
+            Default = (featureStates and (featureStates.TpwalkValue or featureStates.TpwalkValue) ) or 1,
+            Min = 0.1,
+            Max = 10,
+            Rounding = 2
+        })
+        tpVal:OnChanged(function(v) if featureStates then featureStates.TpwalkValue = v end end)
+
+        local afkToggle = T:AddToggle("AntiAFK", { Title = "Anti AFK", Default = featureStates and featureStates.AntiAFK or false })
+        afkToggle:OnChanged(function(v)
+            if featureStates then featureStates.AntiAFK = v end
+            pcall(function() if _G.ToggleAntiAFK then _G.ToggleAntiAFK(v) end end)
+        end)
+
+        T:AddButton({
+            Title = "Rebind Menu Key",
+            Description = "Use original bindKey if available",
+            Callback = function()
+                if type(bindKey) == "function" then
+                    pcall(bindKey)
+                else
+                    Window:Dialog({ Title = "Keybind", Content = "Original bindKey not exposed.", Buttons = {{Title="OK",Callback=function() end}} })
+                end
+            end
+        })
+    end
+
+    -- AUTO TAB
+    do
+        local T = Tabs.Auto
+        local autoCarry = T:AddToggle("AutoCarry", { Title = "Auto Carry", Default = featureStates and featureStates.AutoCarry or false })
+        autoCarry:OnChanged(function(v) if featureStates then featureStates.AutoCarry = v end pcall(function() if _G.ToggleAutoCarry then _G.ToggleAutoCarry(v) end end) end)
+
+        local autoRevive = T:AddToggle("AutoRevive", { Title = "Auto Revive", Default = featureStates and featureStates.AutoRevive or false })
+        autoRevive:OnChanged(function(v) if featureStates then featureStates.AutoRevive = v end pcall(function() if _G.ToggleAutoRevive then _G.ToggleAutoRevive(v) end end) end)
+
+        local autoVote = T:AddToggle("AutoVote", { Title = "Auto Vote", Default = featureStates and featureStates.AutoVote or false })
+        autoVote:OnChanged(function(v) if featureStates then featureStates.AutoVote = v end end)
+
+        local autoMoney = T:AddToggle("AutoMoneyFarm", { Title = "Auto Money Farm", Default = featureStates and featureStates.AutoMoneyFarm or false })
+        autoMoney:OnChanged(function(v) if featureStates then featureStates.AutoMoneyFarm = v end pcall(function() if _G.ToggleMoneyFarm then _G.ToggleMoneyFarm(v) end end) end)
+
+        local autoWin = T:AddToggle("AutoWin", { Title = "Auto Win", Default = featureStates and featureStates.AutoWin or false })
+        autoWin:OnChanged(function(v) if featureStates then featureStates.AutoWin = v end end)
+
+        if SaveManager then
+            T:AddButton({ Title = "Save Config", Description = "Save current settings", Callback = function() pcall(function() SaveManager:SaveConfig() end) end })
+            T:AddButton({ Title = "Load Config", Description = "Load config", Callback = function() pcall(function() SaveManager:LoadConfig() end) end })
+        else
+            T:AddParagraph({ Title = "Config", Content = "SaveManager not available." })
+        end
+    end
+
+    -- VISUALS TAB
+    do
+        local T = Tabs.Visuals
+        local fullBright = T:AddToggle("FullBright", { Title = "FullBright", Default = featureStates and featureStates.FullBright or false })
+        fullBright:OnChanged(function(v) if featureStates then featureStates.FullBright = v end pcall(function() if _G.ToggleFullBright then _G.ToggleFullBright(v) end end) end)
+
+        local noFog = T:AddToggle("NoFog", { Title = "Remove Fog", Default = featureStates and featureStates.NoFog or false })
+        noFog:OnChanged(function(v) if featureStates then featureStates.NoFog = v end pcall(function() if _G.ToggleNoFog then _G.ToggleNoFog(v) end end) end)
+
+        local transparency = T:AddSlider("WindowTransparency", {
+            Title = "Window Transparency",
+            Default = Fluent.TransparencyValue or 0.2,
+            Min = 0,
+            Max = 1,
+            Rounding = 2
+        })
+        transparency:OnChanged(function(v) pcall(function() Fluent.TransparencyValue = v end) end)
+
+        T:AddButton({ Title = "Toggle Theme", Description = "Switch Dark/Light", Callback = function()
+            local current = Fluent.GetCurrentTheme and Fluent:GetCurrentTheme() or Fluent.Theme
+            if Fluent.SetTheme then pcall(function() Fluent:SetTheme(current == "Dark" and "Light" or "Dark") end) end
+        end })
+    end
+
+    -- ESP TAB
+    do
+        local T = Tabs.ESP
+        local esp = featureStates and featureStates.PlayerESP or {}
+
+        local playerBoxes = T:AddToggle("PlayerBoxes", { Title = "Player Boxes", Default = esp.boxes or false })
+        playerBoxes:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.boxes = v end pcall(function() if v and startPlayerESP then startPlayerESP() end if not v and stopPlayerESP then stopPlayerESP() end end) end)
+
+        local playerTracers = T:AddToggle("PlayerTracers", { Title = "Player Tracers", Default = esp.tracers or false })
+        playerTracers:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.tracers = v end end)
+
+        local playerNames = T:AddToggle("PlayerNames", { Title = "Player Name ESP", Default = esp.names or false })
+        playerNames:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.names = v end end)
+
+        local playerDistance = T:AddToggle("PlayerDistance", { Title = "Player Distance ESP", Default = esp.distance or false })
+        playerDistance:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.distance = v end end)
+
+        local rainbowBoxes = T:AddToggle("PlayerRainbowBoxes", { Title = "Rainbow Boxes", Default = esp.rainbowBoxes or false })
+        rainbowBoxes:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.rainbowBoxes = v end end)
+
+        local boxType = T:AddDropdown("PlayerBoxType", { Title = "Box Type", Values = {"2D","3D"}, Multi = false, Default = esp.boxType == "3D" and 2 or 1 })
+        boxType:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.boxType = v end end)
+
+        local nb = featureStates and featureStates.NextbotESP or {}
+        local nbBoxes = T:AddToggle("NextbotBoxes", { Title = "Nextbot Boxes", Default = nb.boxes or false })
+        nbBoxes:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.boxes = v end pcall(function() if v and startNextbotESP then startNextbotESP() end if not v and stopNextbotESP then stopNextbotESP() end end) end)
+
+        local nbTracers = T:AddToggle("NextbotTracers", { Title = "Nextbot Tracers", Default = nb.tracers or false })
+        nbTracers:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.tracers = v end end)
+
+        local nbNames = T:AddToggle("NextbotNames", { Title = "Nextbot Names", Default = nb.names or false })
+        nbNames:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.names = v end end)
+    end
+
+    -- SETTINGS TAB
+    do
+        local T = Tabs.Settings
+        if InterfaceManager then
+            InterfaceManager:SetLibrary(Fluent)
+            InterfaceManager:SetFolder("DaraHub-Fluent")
+            InterfaceManager:BuildInterfaceSection(T)
+        end
+        if SaveManager then
+            SaveManager:SetLibrary(Fluent)
+            SaveManager:SetFolder("DaraHub-Fluent/configs")
+            SaveManager:BuildConfigSection(T)
+        end
+
+        T:AddParagraph({ Title = "UI", Content = "Fluent UI settings." })
+
+        T:AddButton({ Title = "Close Old UI", Description = "Close remaining old UI", Callback = function()
+            pcall(function() if WindUI and WindUI.Unloaded == false then WindUI.Unloaded = true end end)
+        end })
+
+        T:AddButton({ Title = "Print featureStates (debug)", Description = "Logs the current featureStates table", Callback = function()
+            pcall(function()
+                print("===== featureStates dump =====")
+                local function dump(t, indent)
+                    indent = indent or ""
+                    for k,v in pairs(t) do
+                        if type(v) == "table" then
+                            print(indent..tostring(k)..":")
+                            dump(v, indent.."  ")
+                        else
+                            print(indent..tostring(k)..": "..tostring(v))
+                        end
+                    end
+                end
+                dump(featureStates)
+            end)
+        end })
+
+        local trans = T:AddSlider("UITransparency", { Title = "Window Transparency", Default = Fluent.TransparencyValue or 0.2, Min = 0, Max = 1, Rounding = 2 })
+        trans:OnChanged(function(v) pcall(function() Fluent.TransparencyValue = v end) end)
+    end
+
+    Window:SelectTab(1)
+
+    Fluent:Notify({ Title = "Dara Hub - Fluent", Content = "Fluent UI loaded and mapped.", Duration = 5 })
+end
+
+-- ===== END FLUENT UI INSERT =====
+
+
 -- Variables
 local character, humanoid, rootPart
 local isJumpHeld = false
@@ -6210,202 +6412,3 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/r
                 securityPart.CanCollide = true
                 securityPart.Parent = workspace
                 rootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
-
-
--- ===== Evade Hub Fluent UI Builder (auto-added) =====
--- This section creates Fluent tabs & controls and hooks them to existing featureStates & functions
--- It will wait until the script's featureStates table exists, then build UI controls mapping to it.
-
-task.spawn(function()
-    -- wait for Fluent and featureStates to be available
-    local timeout = 10
-    local waited = 0
-    while (not fluent_available()) and waited < timeout do
-        task.wait(0.1)
-        waited = waited + 0.1
-    end
-    -- helper to allow compatibility when prelude created Window differently
-    local function getWindow()
-        if typeof(Window) == "table" then return Window end
-        return nil
-    end
-    local win = getWindow()
-    if not win then
-        -- retry a bit
-        for i=1,50 do
-            if typeof(Window) == "table" then win = Window; break end
-            task.wait(0.05)
-        end
-    end
-
-    -- wait for featureStates table
-    waited = 0
-    while _G == nil or featureStates == nil and waited < 10 do
-        task.wait(0.1)
-        waited = waited + 0.1
-    end
-    if featureStates == nil then
-        -- try global
-        featureStates = getgenv and getgenv().featureStates or _G.featureStates
-    end
-    if not featureStates then
-        pcall(function() Fluent:Notify({Title = "Evade Hub", Content = "featureStates not found — UI aborted", Duration = 5}) end)
-        return
-    end
-
-    -- Create tabs similar to original
-    local Tabs = {}
-    Tabs.Player = win:AddTab({Title = "Player", Icon = "user"})
-    Tabs.Auto = win:AddTab({Title = "Auto", Icon = "zap"})
-    Tabs.Visuals = win:AddTab({Title = "Visuals", Icon = "eye"})
-    Tabs.ESP = win:AddTab({Title = "ESP", Icon = "target"})
-    Tabs.Settings = win:AddTab({Title = "Settings", Icon = "settings"})
-
-    -- Helper to safely set featureStates and call optional functions
-    local function setFeature(keyPath, value)
-        local success, msg = pcall(function()
-            -- support nested keys like PlayerESP.boxes
-            local parts = {}
-            for part in string.gmatch(keyPath, "[^%.]+") do table.insert(parts, part) end
-            local tbl = featureStates
-            for i=1,#parts-1 do
-                tbl = tbl[parts[i]]
-                if not tbl then return end
-            end
-            tbl[parts[#parts]] = value
-        end)
-        if not success then
-            warn("Failed to set featureStates." .. keyPath, msg)
-        end
-    end
-
-    -- PLAYER TAB
-    do
-        local t = Tabs.Player
-        -- Infinite Jump Toggle
-        local infJump = t:AddToggle("InfiniteJump", {Title = "Infinite Jump", Default = featureStates.InfiniteJump or false})
-        infJump:OnChanged(function(val)
-            setFeature("InfiniteJump", val)
-            pcall(function() if val then EnableInfiniteJump() else DisableInfiniteJump() end end)
-        end)
-
-        -- Jump Method Dropdown
-        local jumpMethodVals = {"Hold","Toggle","Tap"}
-        local jm = t:AddDropdown("JumpMethod", {Title = "Jump Method", Values = jumpMethodVals, Multi = false, Default = 1})
-        jm:SetValue(featureStates.JumpMethod or "Hold")
-        jm:OnChanged(function(val) setFeature("JumpMethod", val) end)
-
-        -- Fly Toggle & Speed
-        local fly = t:AddToggle("Fly", {Title = "Fly", Default = featureStates.Fly or false})
-        fly:OnChanged(function(val) setFeature("Fly", val) end)
-        local flySpeed = t:AddSlider("FlySpeed", {Title = "Fly Speed", Description = "Speed while flying", Default = featureStates.FlySpeed or 5, Min = 1, Max = 50, Rounding = 1})
-        flySpeed:OnChanged(function(val) setFeature("FlySpeed", val) end)
-
-        -- TP Walk
-        local tp = t:AddToggle("TPWalk", {Title = "TP Walk", Default = featureStates.TPWALK or false})
-        tp:OnChanged(function(val) setFeature("TPWALK", val) end)
-        local tpval = t:AddSlider("TpWalkValue", {Title = "TP Walk Value", Default = featureStates.TpwalkValue or featureStates.TpwalkValue or 1, Min = 0.1, Max = 10, Rounding = 2})
-        tpval:OnChanged(function(val) setFeature("TpwalkValue", val) end)
-
-        -- Jump Power/Height
-        local jp = t:AddSlider("JumpPower", {Title = "Jump Power", Default = featureStates.JumpPower or 5, Min = 1, Max = 100, Rounding = 1})
-        jp:OnChanged(function(val) setFeature("JumpPower", val) end)
-
-        -- Anti AFK
-        local afk = t:AddToggle("AntiAFK", {Title = "Anti AFK", Default = featureStates.AntiAFK or false})
-        afk:OnChanged(function(val) setFeature("AntiAFK", val) end)
-    end
-
-    -- AUTO TAB
-    do
-        local t = Tabs.Auto
-        local function addAutoToggle(name, key)
-            local tog = t:AddToggle(key, {Title = name, Default = featureStates[key] or false})
-            tog:OnChanged(function(val) setFeature(key, val) end)
-        end
-        addAutoToggle("Auto Carry", "AutoCarry")
-        addAutoToggle("Auto Revive", "AutoRevive")
-        addAutoToggle("Auto Self Revive", "AutoSelfRevive")
-        addAutoToggle("Auto Vote", "AutoVote")
-        addAutoToggle("Auto Win", "AutoWin")
-        addAutoToggle("Auto Money Farm", "AutoMoneyFarm")
-    end
-
-    -- VISUALS TAB
-    do
-        local t = Tabs.Visuals
-        local fb = t:AddToggle("FullBright", {Title = "FullBright", Default = featureStates.FullBright or false})
-        fb:OnChanged(function(v) setFeature("FullBright", v) pcall(function() if v then EnableFullBright() else DisableFullBright() end end) end)
-
-        local nf = t:AddToggle("NoFog", {Title = "Remove Fog", Default = featureStates.NoFog or false})
-        nf:OnChanged(function(v) setFeature("NoFog", v) pcall(function() if v then EnableNoFog() else DisableNoFog() end end) end)
-    end
-
-    -- ESP TAB
-    do
-        local t = Tabs.ESP
-
-        -- Player ESP group
-        t:AddParagraph({Title = "Player ESP", Content = "Player ESP options"})
-        local pboxes = t:AddToggle("PlayerBoxes", {Title = "Boxes", Default = featureStates.PlayerESP and featureStates.PlayerESP.boxes or false})
-        pboxes:OnChanged(function(v) setFeature("PlayerESP.boxes", v) pcall(function() if v then startPlayerESP() else stopPlayerESP() end end) end)
-        local ptracers = t:AddToggle("PlayerTracers", {Title = "Tracers", Default = featureStates.PlayerESP and featureStates.PlayerESP.tracers or false})
-        ptracers:OnChanged(function(v) setFeature("PlayerESP.tracers", v) end)
-        local pnames = t:AddToggle("PlayerNames", {Title = "Names", Default = featureStates.PlayerESP and featureStates.PlayerESP.names or false})
-        pnames:OnChanged(function(v) setFeature("PlayerESP.names", v) end)
-        local pdistance = t:AddToggle("PlayerDistance", {Title = "Distance", Default = featureStates.PlayerESP and featureStates.PlayerESP.distance or false})
-        pdistance:OnChanged(function(v) setFeature("PlayerESP.distance", v) end)
-
-        -- Nextbot ESP
-        t:AddParagraph({Title = "Nextbot ESP", Content = "Nextbot options"})
-        local nboxes = t:AddToggle("NextbotBoxes", {Title = "Boxes", Default = featureStates.NextbotESP and featureStates.NextbotESP.boxes or false})
-        nboxes:OnChanged(function(v) setFeature("NextbotESP.boxes", v) pcall(function() if v then startNextbotESP() else stopNextbotESP() end end) end)
-        local ntracers = t:AddToggle("NextbotTracers", {Title = "Tracers", Default = featureStates.NextbotESP and featureStates.NextbotESP.tracers or false})
-        ntracers:OnChanged(function(v) setFeature("NextbotESP.tracers", v) end)
-        local nnames = t:AddToggle("NextbotNames", {Title = "Names", Default = featureStates.NextbotESP and featureStates.NextbotESP.names or false})
-        nnames:OnChanged(function(v) setFeature("NextbotESP.names", v) end)
-
-        -- Downed options
-        t:AddParagraph({Title = "Downed", Content = "Downed player visuals"})
-        local dboxes = t:AddToggle("DownedBoxes", {Title = "Downed Boxes", Default = featureStates.DownedBoxESP or false})
-        dboxes:OnChanged(function(v) setFeature("DownedBoxESP", v) end)
-        local dtracers = t:AddToggle("DownedTracers", {Title = "Downed Tracers", Default = featureStates.DownedTracer or false})
-        dtracers:OnChanged(function(v) setFeature("DownedTracer", v) end)
-    end
-
-    -- SETTINGS TAB
-    do
-        local t = Tabs.Settings
-        t:AddParagraph({Title = "Settings", Content = "UI and configuration settings"})
-
-        -- Transparency slider for window (if supported)
-        local trans = t:AddSlider("Transparency", {Title = "Window Transparency", Default = 20, Min = 0, Max = 100, Rounding = 0})
-        trans:OnChanged(function(v)
-            pcall(function() if Window.SetTransparency then Window:SetTransparency(v/100) end end)
-        end)
-
-        -- Theme select
-        local theme = t:AddDropdown("ThemeSelect", {Title = "Theme", Values = {"Dark","Light"}, Multi = false, Default = 1})
-        theme:OnChanged(function(v)
-            pcall(function() Fluent:SetTheme(v) end)
-        end)
-
-        -- Save/Load buttons
-        t:AddButton({Title = "Save Configuration", Description = "Save current settings", Callback = function()
-            pcall(function() SaveManager:SaveConfig("default") end)
-            Fluent:Notify({Title="Evade Hub", Content="Config saved", Duration=2})
-        end})
-        t:AddButton({Title = "Load Configuration", Description = "Load saved settings", Callback = function()
-            pcall(function() SaveManager:LoadConfig("default") end)
-            Fluent:Notify({Title="Evade Hub", Content="Config loaded", Duration=2})
-        end})
-    end
-
-    -- Final notification
-    pcall(function() Fluent:Notify({Title="Evade Hub", Content="UI built and linked", Duration=3}) end)
-end)
-
--- small compatibility functions used above if not present
-function fluent_available()
-    return typeof(Fluent) == "table" and typeof(Window) == "table"
-end
