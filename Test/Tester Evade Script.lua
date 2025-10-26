@@ -3294,9 +3294,6 @@ Fluent:Notify({
     Duration = 6
 })
 
--- Load any autosave config
-SaveManager:LoadAutoloadConfig()
-
 
 -- ===== Quick On-Screen Buttons (AutoCarry, Bhop, Gravity, Auto Crouch) =====
 do
@@ -3521,3 +3518,5 @@ do
         pcall(function() Fluent:Notify({Title="Evade Buttons", Content="Settings tab not found; cannot add size inputs.", Duration=6}) end)
     end
 end
+
+SaveManager:LoadAutoloadConfig()
