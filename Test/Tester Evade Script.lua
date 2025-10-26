@@ -684,8 +684,9 @@ local featureStates = {
     TimerDisplay = false
 }
 
--- ===== START FLUENT UI INSERT =====
--- Load Fluent and setup UI mapped to existing variables. This section replaces WindUI UI.
+
+-- ===== START FLUENT UI REBUILD =====
+-- Fluent UI (Dark theme, Acrylic = true). Controls mapped to existing variables in Tester Evade Script.
 local ok, Fluent = pcall(function()
     return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 end)
@@ -702,7 +703,7 @@ else
         Title = "Dara Hub",
         SubTitle = "Evade - Fluent UI",
         TabWidth = 160,
-        Size = UDim2.fromOffset(600, 500),
+        Size = UDim2.fromOffset(600, 520),
         Acrylic = true,
         Theme = "Dark",
         MinimizeKey = Enum.KeyCode.LeftControl
@@ -716,62 +717,50 @@ else
         Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
     }
 
-    local Options = Fluent.Options
+    -- Ensure tables exist
+    featureStates = featureStates or {}
+    currentSettings = currentSettings or {}
 
-    -- Helper safe pcall
-    local safeCall = function(f, ...)
-        if type(f) == "function" then
-            pcall(f, ...)
+    -- Helper to attempt calling original handlers (if exposed globally)
+    local function tryCall(name, ...)
+        if type(_G) == "table" and type(_G[name]) == "function" then
+            pcall(_G[name], ...)
             return true
         end
         return false
     end
 
-    -- PLAYER TAB
+    -- PLAYER TAB (match original controls: Inputs where original used inputs)
     do
         local T = Tabs.Player
 
-        local infJumpToggle = T:AddToggle("InfiniteJump", {
-            Title = "Infinite Jump",
-            Default = featureStates and featureStates.InfiniteJump or false
-        })
-        infJumpToggle:OnChanged(function(val)
-            if featureStates then featureStates.InfiniteJump = val end
-            pcall(function() if _G.ToggleInfiniteJump then _G.ToggleInfiniteJump(val) end end)
-        end)
+        -- Infinite Jump
+        local infJumpToggle = T:AddToggle("InfiniteJump", { Title = "Infinite Jump", Default = featureStates.InfiniteJump or false })
+        infJumpToggle:OnChanged(function(v) featureStates.InfiniteJump = v; pcall(function() tryCall("ToggleInfiniteJump", v) end) end)
 
-        local flyToggle = T:AddToggle("Fly", {
-            Title = "Fly",
-            Default = featureStates and featureStates.Fly or false
-        })
-        flyToggle:OnChanged(function(val)
-            if featureStates then featureStates.Fly = val end
-            pcall(function() if _G.SetFly then _G.SetFly(val) end end)
-        end)
+        -- Fly
+        local flyToggle = T:AddToggle("Fly", { Title = "Fly", Default = featureStates.Fly or false })
+        flyToggle:OnChanged(function(v) featureStates.Fly = v; pcall(function() tryCall("SetFly", v) end) end)
 
         local flySpeed = T:AddSlider("FlySpeed", {
             Title = "Fly Speed",
             Description = "Adjust fly speed",
-            Default = featureStates and featureStates.FlySpeed or 5,
+            Default = featureStates.FlySpeed or 5,
             Min = 1,
-            Max = 50,
+            Max = 100,
             Rounding = 1,
-            Callback = function(v)
-                if featureStates then featureStates.FlySpeed = v end
-                pcall(function() if _G.UpdateFlySpeed then _G.UpdateFlySpeed(v) end end)
-            end
+            Callback = function(val) featureStates.FlySpeed = val; pcall(function() tryCall("UpdateFlySpeed", val) end) end
         })
 
+        -- Jump Power (slider as original)
         local jumpPower = T:AddSlider("JumpPower", {
             Title = "Jump Power",
-            Default = featureStates and featureStates.JumpPower or 5,
+            Default = featureStates.JumpPower or 5,
             Min = 0,
-            Max = 50,
+            Max = 100,
             Rounding = 1
         })
-        jumpPower:OnChanged(function(v)
-            if featureStates then featureStates.JumpPower = v end
-        end)
+        jumpPower:OnChanged(function(v) featureStates.JumpPower = v end)
 
         local jumpMethod = T:AddDropdown("JumpMethod", {
             Title = "Jump Method",
@@ -779,63 +768,104 @@ else
             Multi = false,
             Default = 1
         })
-        if featureStates and featureStates.JumpMethod then
-            jumpMethod:SetValue(featureStates.JumpMethod)
-        end
-        jumpMethod:OnChanged(function(v) if featureStates then featureStates.JumpMethod = v end end)
+        if featureStates and featureStates.JumpMethod then jumpMethod:SetValue(featureStates.JumpMethod) end
+        jumpMethod:OnChanged(function(v) featureStates.JumpMethod = v end)
 
-        local tpToggle = T:AddToggle("TPWalk", { Title = "TP WALK", Default = featureStates and featureStates.TPWALK or false })
-        tpToggle:OnChanged(function(v) if featureStates then featureStates.TPWALK = v end end)
+        -- TP Walk
+        local tpToggle = T:AddToggle("TPWalk", { Title = "TP WALK", Default = featureStates.TPWALK or false })
+        tpToggle:OnChanged(function(v) featureStates.TPWALK = v end)
+        local tpVal = T:AddSlider("TpWalkValue", { Title = "TPWalk Value", Default = tonumber(featureStates.TpwalkValue) or 1, Min = 0.1, Max = 10, Rounding = 2 })
+        tpVal:OnChanged(function(v) featureStates.TpwalkValue = v end)
 
-        local tpVal = T:AddSlider("TpWalkValue", {
-            Title = "TPWalk Value",
-            Default = (featureStates and (featureStates.TpwalkValue or featureStates.TpwalkValue) ) or 1,
-            Min = 0.1,
-            Max = 10,
-            Rounding = 2
-        })
-        tpVal:OnChanged(function(v) if featureStates then featureStates.TpwalkValue = v end end)
+        -- Anti AFK
+        local afkToggle = T:AddToggle("AntiAFK", { Title = "Anti AFK", Default = featureStates.AntiAFK or false })
+        afkToggle:OnChanged(function(v) featureStates.AntiAFK = v; pcall(function() tryCall("ToggleAntiAFK", v) end) end)
 
-        local afkToggle = T:AddToggle("AntiAFK", { Title = "Anti AFK", Default = featureStates and featureStates.AntiAFK or false })
-        afkToggle:OnChanged(function(v)
-            if featureStates then featureStates.AntiAFK = v end
-            pcall(function() if _G.ToggleAntiAFK then _G.ToggleAntiAFK(v) end end)
-        end)
+        -- Rebind Menu Key
+        T:AddButton({ Title = "Rebind Menu Key", Description = "Use original bindKey if available", Callback = function() if type(bindKey)=="function" then pcall(bindKey) else Window:Dialog({ Title="Keybind", Content="Original bindKey not exposed.", Buttons={{Title="OK", Callback=function() end}}) end end })
 
-        T:AddButton({
-            Title = "Rebind Menu Key",
-            Description = "Use original bindKey if available",
-            Callback = function()
-                if type(bindKey) == "function" then
-                    pcall(bindKey)
-                else
-                    Window:Dialog({ Title = "Keybind", Content = "Original bindKey not exposed.", Buttons = {{Title="OK",Callback=function() end}} })
+        -- Bhop / Auto Jump (toggle)
+        local bhopToggle = T:AddToggle("BhopEnabled", { Title = "Bhop / Auto Jump", Default = (featureStates.BhopEnabled) or false })
+        bhopToggle:OnChanged(function(v) featureStates.BhopEnabled = v; pcall(function() tryCall("ToggleBhop", v) end) end)
+
+        -- Input-only controls (as original): Speed, JumpCap, AirStrafeAcceleration
+        local speedInput = T:AddInput("PlayerSpeedInput", {
+            Title = "Speed",
+            Default = tostring(currentSettings and currentSettings.Speed or "1500"),
+            Placeholder = "Enter Speed (number)",
+            Numeric = true,
+            Finished = true,
+            Callback = function(val)
+                local n = tonumber(val)
+                if n then
+                    currentSettings.Speed = tostring(n)
+                    -- apply immediately
+                    pcall(function() applyToTables(function(obj) obj.Speed = n end) end)
                 end
             end
         })
+
+        local jumpCapInput = T:AddInput("JumpCapInput", {
+            Title = "Jump Cap",
+            Default = tostring(currentSettings and currentSettings.JumpCap or "1"),
+            Placeholder = "Enter Jump Cap (number)",
+            Numeric = true,
+            Finished = true,
+            Callback = function(val)
+                local n = tonumber(val)
+                if n then
+                    currentSettings.JumpCap = tostring(n)
+                    pcall(function() applyToTables(function(obj) obj.JumpCap = n end) end)
+                end
+            end
+        })
+
+        local asaInput = T:AddInput("AirStrafeAccelerationInput", {
+            Title = "Air Strafe Acceleration",
+            Default = tostring(currentSettings and currentSettings.AirStrafeAcceleration or "187"),
+            Placeholder = "Enter AirStrafeAcceleration (number)",
+            Numeric = true,
+            Finished = true,
+            Callback = function(val)
+                local n = tonumber(val)
+                if n then
+                    currentSettings.AirStrafeAcceleration = tostring(n)
+                    pcall(function() applyToTables(function(obj) obj.AirStrafeAcceleration = n end) end)
+                end
+            end
+        })
+
+        -- Sync inputs back to UI when opened
+        pcall(function()
+            if currentSettings then
+                if currentSettings.Speed then speedInput:SetValue(tostring(currentSettings.Speed)) end
+                if currentSettings.JumpCap then jumpCapInput:SetValue(tostring(currentSettings.JumpCap)) end
+                if currentSettings.AirStrafeAcceleration then asaInput:SetValue(tostring(currentSettings.AirStrafeAcceleration)) end
+            end
+        end)
     end
 
     -- AUTO TAB
     do
         local T = Tabs.Auto
-        local autoCarry = T:AddToggle("AutoCarry", { Title = "Auto Carry", Default = featureStates and featureStates.AutoCarry or false })
-        autoCarry:OnChanged(function(v) if featureStates then featureStates.AutoCarry = v end pcall(function() if _G.ToggleAutoCarry then _G.ToggleAutoCarry(v) end end) end)
+        local autoCarry = T:AddToggle("AutoCarry", { Title = "Auto Carry", Default = featureStates.AutoCarry or false })
+        autoCarry:OnChanged(function(v) featureStates.AutoCarry = v; pcall(function() tryCall("ToggleAutoCarry", v) end) end)
 
-        local autoRevive = T:AddToggle("AutoRevive", { Title = "Auto Revive", Default = featureStates and featureStates.AutoRevive or false })
-        autoRevive:OnChanged(function(v) if featureStates then featureStates.AutoRevive = v end pcall(function() if _G.ToggleAutoRevive then _G.ToggleAutoRevive(v) end end) end)
+        local autoRevive = T:AddToggle("AutoRevive", { Title = "Auto Revive", Default = featureStates.AutoRevive or false })
+        autoRevive:OnChanged(function(v) featureStates.AutoRevive = v; pcall(function() tryCall("ToggleAutoRevive", v) end) end)
 
-        local autoVote = T:AddToggle("AutoVote", { Title = "Auto Vote", Default = featureStates and featureStates.AutoVote or false })
-        autoVote:OnChanged(function(v) if featureStates then featureStates.AutoVote = v end end)
+        local autoVote = T:AddToggle("AutoVote", { Title = "Auto Vote", Default = featureStates.AutoVote or false })
+        autoVote:OnChanged(function(v) featureStates.AutoVote = v end)
 
-        local autoMoney = T:AddToggle("AutoMoneyFarm", { Title = "Auto Money Farm", Default = featureStates and featureStates.AutoMoneyFarm or false })
-        autoMoney:OnChanged(function(v) if featureStates then featureStates.AutoMoneyFarm = v end pcall(function() if _G.ToggleMoneyFarm then _G.ToggleMoneyFarm(v) end end) end)
+        local autoMoney = T:AddToggle("AutoMoneyFarm", { Title = "Auto Money Farm", Default = featureStates.AutoMoneyFarm or false })
+        autoMoney:OnChanged(function(v) featureStates.AutoMoneyFarm = v; pcall(function() tryCall("ToggleMoneyFarm", v) end) end)
 
-        local autoWin = T:AddToggle("AutoWin", { Title = "Auto Win", Default = featureStates and featureStates.AutoWin or false })
-        autoWin:OnChanged(function(v) if featureStates then featureStates.AutoWin = v end end)
+        local autoWin = T:AddToggle("AutoWin", { Title = "Auto Win", Default = featureStates.AutoWin or false })
+        autoWin:OnChanged(function(v) featureStates.AutoWin = v end)
 
         if SaveManager then
             T:AddButton({ Title = "Save Config", Description = "Save current settings", Callback = function() pcall(function() SaveManager:SaveConfig() end) end })
-            T:AddButton({ Title = "Load Config", Description = "Load config", Callback = function() pcall(function() SaveManager:LoadConfig() end) end })
+            T:AddButton({ Title = "Load Config", Description = "Load saved config", Callback = function() pcall(function() SaveManager:LoadConfig() end) end })
         else
             T:AddParagraph({ Title = "Config", Content = "SaveManager not available." })
         end
@@ -844,11 +874,11 @@ else
     -- VISUALS TAB
     do
         local T = Tabs.Visuals
-        local fullBright = T:AddToggle("FullBright", { Title = "FullBright", Default = featureStates and featureStates.FullBright or false })
-        fullBright:OnChanged(function(v) if featureStates then featureStates.FullBright = v end pcall(function() if _G.ToggleFullBright then _G.ToggleFullBright(v) end end) end)
+        local fullBright = T:AddToggle("FullBright", { Title = "FullBright", Default = featureStates.FullBright or false })
+        fullBright:OnChanged(function(v) featureStates.FullBright = v; pcall(function() tryCall("ToggleFullBright", v) end) end)
 
-        local noFog = T:AddToggle("NoFog", { Title = "Remove Fog", Default = featureStates and featureStates.NoFog or false })
-        noFog:OnChanged(function(v) if featureStates then featureStates.NoFog = v end pcall(function() if _G.ToggleNoFog then _G.ToggleNoFog(v) end end) end)
+        local noFog = T:AddToggle("NoFog", { Title = "Remove Fog", Default = featureStates.NoFog or false })
+        noFog:OnChanged(function(v) featureStates.NoFog = v; pcall(function() tryCall("ToggleNoFog", v) end) end)
 
         local transparency = T:AddSlider("WindowTransparency", {
             Title = "Window Transparency",
@@ -857,96 +887,64 @@ else
             Max = 1,
             Rounding = 2
         })
-        transparency:OnChanged(function(v) pcall(function() Fluent.TransparencyValue = v end) end)
+        transparency:OnChanged(function(v) Fluent.TransparencyValue = v end)
 
-        T:AddButton({ Title = "Toggle Theme", Description = "Switch Dark/Light", Callback = function()
-            local current = Fluent.GetCurrentTheme and Fluent:GetCurrentTheme() or Fluent.Theme
-            if Fluent.SetTheme then pcall(function() Fluent:SetTheme(current == "Dark" and "Light" or "Dark") end) end
-        end })
+        T:AddButton({ Title = "Toggle Theme", Description = "Switch Dark/Light", Callback = function() local current = Fluent.GetCurrentTheme and Fluent:GetCurrentTheme() or Fluent.Theme; if Fluent.SetTheme then pcall(function() Fluent:SetTheme((current=="Dark") and "Light" or "Dark") end) end end })
     end
 
     -- ESP TAB
     do
         local T = Tabs.ESP
-        local esp = featureStates and featureStates.PlayerESP or {}
+        local esp = featureStates.PlayerESP or {}
 
         local playerBoxes = T:AddToggle("PlayerBoxes", { Title = "Player Boxes", Default = esp.boxes or false })
-        playerBoxes:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.boxes = v end pcall(function() if v and startPlayerESP then startPlayerESP() end if not v and stopPlayerESP then stopPlayerESP() end end) end)
+        playerBoxes:OnChanged(function(v) featureStates.PlayerESP.boxes = v; pcall(function() if v then tryCall("startPlayerESP") else tryCall("stopPlayerESP") end end) end)
 
         local playerTracers = T:AddToggle("PlayerTracers", { Title = "Player Tracers", Default = esp.tracers or false })
-        playerTracers:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.tracers = v end end)
+        playerTracers:OnChanged(function(v) featureStates.PlayerESP.tracers = v end)
 
         local playerNames = T:AddToggle("PlayerNames", { Title = "Player Name ESP", Default = esp.names or false })
-        playerNames:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.names = v end end)
+        playerNames:OnChanged(function(v) featureStates.PlayerESP.names = v end)
 
         local playerDistance = T:AddToggle("PlayerDistance", { Title = "Player Distance ESP", Default = esp.distance or false })
-        playerDistance:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.distance = v end end)
+        playerDistance:OnChanged(function(v) featureStates.PlayerESP.distance = v end)
 
         local rainbowBoxes = T:AddToggle("PlayerRainbowBoxes", { Title = "Rainbow Boxes", Default = esp.rainbowBoxes or false })
-        rainbowBoxes:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.rainbowBoxes = v end end)
+        rainbowBoxes:OnChanged(function(v) featureStates.PlayerESP.rainbowBoxes = v end)
 
-        local boxType = T:AddDropdown("PlayerBoxType", { Title = "Box Type", Values = {"2D","3D"}, Multi = false, Default = esp.boxType == "3D" and 2 or 1 })
-        boxType:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.boxType = v end end)
+        local boxType = T:AddDropdown("PlayerBoxType", { Title = "Box Type", Values = {"2D","3D"}, Multi = false, Default = (esp.boxType=="3D" and 2) or 1 })
+        boxType:OnChanged(function(v) featureStates.PlayerESP.boxType = v end)
 
-        local nb = featureStates and featureStates.NextbotESP or {}
+        local nb = featureStates.NextbotESP or {}
         local nbBoxes = T:AddToggle("NextbotBoxes", { Title = "Nextbot Boxes", Default = nb.boxes or false })
-        nbBoxes:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.boxes = v end pcall(function() if v and startNextbotESP then startNextbotESP() end if not v and stopNextbotESP then stopNextbotESP() end end) end)
-
+        nbBoxes:OnChanged(function(v) featureStates.NextbotESP.boxes = v; pcall(function() if v then tryCall("startNextbotESP") else tryCall("stopNextbotESP") end end) end)
         local nbTracers = T:AddToggle("NextbotTracers", { Title = "Nextbot Tracers", Default = nb.tracers or false })
-        nbTracers:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.tracers = v end end)
-
+        nbTracers:OnChanged(function(v) featureStates.NextbotESP.tracers = v end)
         local nbNames = T:AddToggle("NextbotNames", { Title = "Nextbot Names", Default = nb.names or false })
-        nbNames:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.names = v end end)
+        nbNames:OnChanged(function(v) featureStates.NextbotESP.names = v end)
     end
 
     -- SETTINGS TAB
     do
         local T = Tabs.Settings
-        if InterfaceManager then
-            InterfaceManager:SetLibrary(Fluent)
-            InterfaceManager:SetFolder("DaraHub-Fluent")
-            InterfaceManager:BuildInterfaceSection(T)
-        end
-        if SaveManager then
-            SaveManager:SetLibrary(Fluent)
-            SaveManager:SetFolder("DaraHub-Fluent/configs")
-            SaveManager:BuildConfigSection(T)
-        end
+        if InterfaceManager then InterfaceManager:SetLibrary(Fluent); InterfaceManager:SetFolder("DaraHub-Fluent"); InterfaceManager:BuildInterfaceSection(T) end
+        if SaveManager then SaveManager:SetLibrary(Fluent); SaveManager:SetFolder("DaraHub-Fluent/configs"); SaveManager:BuildConfigSection(T) end
 
         T:AddParagraph({ Title = "UI", Content = "Fluent UI settings." })
 
-        T:AddButton({ Title = "Close Old UI", Description = "Close remaining old UI", Callback = function()
-            pcall(function() if WindUI and WindUI.Unloaded == false then WindUI.Unloaded = true end end)
-        end })
+        T:AddButton({ Title = "Close Old UI", Description = "Close remaining old UI", Callback = function() pcall(function() if WindUI and WindUI.Unloaded == false then WindUI.Unloaded = true end end) end })
 
-        T:AddButton({ Title = "Print featureStates (debug)", Description = "Logs the current featureStates table", Callback = function()
-            pcall(function()
-                print("===== featureStates dump =====")
-                local function dump(t, indent)
-                    indent = indent or ""
-                    for k,v in pairs(t) do
-                        if type(v) == "table" then
-                            print(indent..tostring(k)..":")
-                            dump(v, indent.."  ")
-                        else
-                            print(indent..tostring(k)..": "..tostring(v))
-                        end
-                    end
-                end
-                dump(featureStates)
-            end)
-        end })
+        T:AddButton({ Title = "Print featureStates (debug)", Description = "Logs the current featureStates table", Callback = function() pcall(function() print("===== featureStates dump ====="); local function dump(t, indent) indent = indent or ""; for k,v in pairs(t) do if type(v) == "table" then print(indent..tostring(k)..":"); dump(v, indent.."  ") else print(indent..tostring(k)..": "..tostring(v)) end end end; dump(featureStates) end) end })
 
         local trans = T:AddSlider("UITransparency", { Title = "Window Transparency", Default = Fluent.TransparencyValue or 0.2, Min = 0, Max = 1, Rounding = 2 })
-        trans:OnChanged(function(v) pcall(function() Fluent.TransparencyValue = v end) end)
+        trans:OnChanged(function(v) Fluent.TransparencyValue = v end)
     end
 
     Window:SelectTab(1)
-
-    Fluent:Notify({ Title = "Dara Hub - Fluent", Content = "Fluent UI loaded and mapped.", Duration = 5 })
+    Fluent:Notify({ Title = "Dara Hub - Fluent", Content = "Fluent UI loaded and mapped to variables.", Duration = 6 })
 end
+-- ===== END FLUENT UI REBUILD =====
 
--- ===== END FLUENT UI INSERT =====
 
 
 -- Variables
@@ -3162,7 +3160,7 @@ local JumpCapInput = Tabs.Player:Input({
     })
 })
 
-local StrafeInput = Tabs.Player:AddInput({
+local StrafeInput = Tabs.Player:Input({
     Title = "Strafe Acceleration",
     Icon = "wind",
     Placeholder = "Default 187",
@@ -4157,7 +4155,7 @@ local AutoCrouchModeDropdown = Tabs.Auto:Dropdown({
 })
 local _Players = game:GetService("Players")
 local _LocalPlayer = _Players.LocalPlayer
-local BhopToggle = Tabs.Auto:AddToggle({
+local BhopToggle = Tabs.Auto:Toggle({
     Title = "Bhop",
     Value = false,
     Callback = function(state)
