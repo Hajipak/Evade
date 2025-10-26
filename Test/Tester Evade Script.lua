@@ -1,314 +1,9 @@
--- Evade UI New Test.lua
--- FULL MERGED FILE: original DaraHub-Evade content followed by Fluent UI replacement
-
--- ===== ORIGINAL DaraHub-Evade.lua content START =====
-
 if getgenv().DaraHubEvadeExecuted then
     return
 end
 getgenv().DaraHubEvadeExecuted = true
--- Load WindUI
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
--- Localization setup
-local Localization = WindUI:Localization({
-    Enabled = true,
-    Prefix = "loc:",
-    DefaultLanguage = "en",
-    Translations = {
-        ["en"] = {
-            ["SCRIPT_TITLE"] = "Dara Hub",
-            ["WELCOME"] = "Made by: Pnsdg And Yomka",
-            ["FEATURES"] = "Features",
-            ["Player_TAB"] = "Player",
-            ["AUTO_TAB"] = "Auto",
-            ["VISUALS_TAB"] = "Visuals",
-            ["ESP_TAB"] = "ESP",
-            ["SETTINGS_TAB"] = "Settings",
-            ["INFINITE_JUMP"] = "Infinite Jump",
-            ["JUMP_METHOD"] = "Infinite Jump Method",
-            ["FLY"] = "Fly",
-            ["FLY_SPEED"] = "Fly Speed",
-            ["TPWALK"] = "TP WALK",
-            ["TPWALK_VALUE"] = "TPWALK VALUE",
-            ["JUMP_HEIGHT"] = "Jump Height",
-            ["JUMP_POWER"] = "Jump Height",
-            ["ANTI_AFK"] = "Anti AFK",
-            ["FULL_BRIGHT"] = "FullBright",
-            ["NO_FOG"] = "Remove Fog",
-            ["PLAYER_NAME_ESP"] = "Player Name ESP",
-            ["PLAYER_BOX_ESP"] = "Player Box ESP",
-            ["PLAYER_TRACER"] = "Player Tracer",
-            ["PLAYER_DISTANCE_ESP"] = "Player Distance ESP",
-            ["PLAYER_RAINBOW_BOXES"] = "Player Rainbow Boxes",
-            ["PLAYER_RAINBOW_TRACERS"] = "Player Rainbow Tracers",
-            ["NEXTBOT_ESP"] = "Nextbot ESP",
-            ["NEXTBOT_NAME_ESP"] = "Nextbot Name ESP",
-            ["DOWNED_BOX_ESP"] = "Downed Player Box ESP",
-            ["DOWNED_TRACER"] = "Downed Player Tracer",
-            ["DOWNED_NAME_ESP"] = "Downed Player Name ESP",
-            ["DOWNED_DISTANCE_ESP"] = "Downed Player Distance ESP",
-            ["AUTO_CARRY"] = "Auto Carry",
-            ["AUTO_REVIVE"] = "Auto Revive",
-            ["AUTO_VOTE"] = "Auto Vote",
-            ["AUTO_VOTE_MAP"] = "Auto Vote Map",
-            ["AUTO_SELF_REVIVE"] = "Auto Self Revive",
-            ["MANUAL_REVIVE"] = "Manual Revive",
-            ["AUTO_WIN"] = "Auto Win",
-            ["AUTO_MONEY_FARM"] = "Auto Money Farm",
-            ["SAVE_CONFIG"] = "Save Configuration",
-            ["LOAD_CONFIG"] = "Load Configuration",
-            ["THEME_SELECT"] = "Select Theme",
-            ["TRANSPARENCY"] = "Window Transparency"
-        }
-    }
-})
-
--- Set WindUI properties
-WindUI.TransparencyValue = 0.2
-WindUI:SetTheme("Dark")
-
--- Create WindUI window
-local Window = WindUI:CreateWindow({
-    Title = "loc:SCRIPT_TITLE",
-    Icon = "rocket",
-    Author = "loc:WELCOME",
-    Folder = "GameHackUI",
-    Size = UDim2.fromOffset(580, 490),
-    Theme = "Dark",
-    HidePanelBackground = false,
-    Acrylic = false,
-    HideSearchBar = false,
-    SideBarWidth = 200
-})
-local isWindowOpen = false
-local function updateWindowOpenState()
-    if Window and type(Window.IsOpen) == "function" then
-        local ok, val = pcall(function() return Window:IsOpen() end)
-        if ok and type(val) == "boolean" then
-            isWindowOpen = val
-            return
-        end
-    end
-    if Window and Window.Opened ~= nil then
-        isWindowOpen = Window.Opened
-        return
-    end
-    isWindowOpen = isWindowOpen or false
-end
-
-pcall(updateWindowOpenState)
-featureStates = featureStates or {}
-if featureStates.DisableCameraShake == nil then
-    featureStates.DisableCameraShake = false
-end
-local currentKey = Enum.KeyCode.RightControl 
-local keyConnection = nil
-local isListeningForInput = false
-local keyInputConnection = nil
-
-local keyBindButton = nil
-
-local keybindFile = "keybind_config.txt"
-
-local function getCleanKeyName(keyCode)
-    local keyString = tostring(keyCode)
-    return keyString:gsub("Enum%.KeyCode%.", "")
-end
-
-local function saveKeybind()
-    local keyString = tostring(currentKey)
-    writefile(keybindFile, keyString)
-end
-
-local function loadKeybind()
-    if isfile(keybindFile) then
-        local savedKey = readfile(keybindFile)
-        for _, key in pairs(Enum.KeyCode:GetEnumItems()) do
-            if tostring(key) == savedKey then
-                currentKey = key
-                return true
-            end
-        end
-    end
-    return false
-end
-
-loadKeybind()
-
-local function updateKeybindButtonDesc()
-    if not keyBindButton then return false end
-    local desc = "Current Key: " .. getCleanKeyName(currentKey)
-    local success = false
-
-    local methods = {
-        function()
-            if type(keyBindButton.SetDesc) == "function" then
-                keyBindButton:SetDesc(desc)
-            else
-                error("no SetDesc")
-            end
-        end,
-        function()
-            if type(keyBindButton.Set) == "function" then
-                keyBindButton:Set("Desc", desc)
-            else
-                error("no Set")
-            end
-        end,
-        function()
-            if keyBindButton.Desc ~= nil then
-                keyBindButton.Desc = desc
-            else
-                error("no Desc property")
-            end
-        end,
-        function()
-            if type(keyBindButton.SetDescription) == "function" then
-                keyBindButton:SetDescription(desc)
-            else
-                error("no SetDescription")
-            end
-        end,
-        function()
-            if type(keyBindButton.SetValue) == "function" then
-                keyBindButton:SetValue(desc)
-            else
-                error("no SetValue")
-            end
-        end
-    }
-
-    for _, fn in ipairs(methods) do
-        local ok = pcall(fn)
-        if ok then
-            success = true
-            break
-        end
-    end
-
-    if not success then
-        pcall(function()
-            WindUI:Notify({
-                Title = "Keybind",
-                Content = desc,
-                Duration = 2
-            })
-        end)
-    end
-
-    return success
-end
-
-local function bindKey(keyBindButtonParam)
-    local targetButton = keyBindButtonParam or keyBindButton
-
-    if isListeningForInput then 
-        isListeningForInput = false
-        if keyConnection then
-            keyConnection:Disconnect()
-            keyConnection = nil
-        end
-        WindUI:Notify({
-            Title = "Keybind",
-            Content = "Key binding cancelled",
-            Duration = 2
-        })
-        return
-    end
-    
-    isListeningForInput = true
-    WindUI:Notify({
-        Title = "Keybind",
-        Content = "Press any key to bind...",
-        Duration = 3
-    })
-    
-    keyConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            currentKey = input.KeyCode
-            isListeningForInput = false
-            if keyConnection then
-                keyConnection:Disconnect()
-                keyConnection = nil
-            end
-            
-            saveKeybind()
-            
-            WindUI:Notify({
-                Title = "Keybind",
-                Content = "Key bound to: " .. getCleanKeyName(currentKey),
-                Duration = 3
-            })
-            pcall(function()
-                updateKeybindButtonDesc()
-            end)
-        end
-    end)
-end
-
-local function handleKeyPress(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == currentKey then
-        local success, isVisible = pcall(function()
-            if Window and type(Window.IsOpen) == "function" then
-                return Window:IsOpen()
-            elseif Window and Window.Opened ~= nil then
-                return Window.Opened
-            else
-                return isWindowOpen
-            end
-        end)
-        if not success then
-            isVisible = isWindowOpen
-        end
-
-        if isVisible then
-            if Window and type(Window.Close) == "function" then
-                pcall(function() Window:Close() end)
-            else
-                isWindowOpen = false
-                if Window and type(Window.OnClose) == "function" then
-                    pcall(function() Window:OnClose() end)
-                end
-            end
-        else
-            if Window and type(Window.Open) == "function" then
-                pcall(function() Window:Open() end)
-            else
-                isWindowOpen = true
-                if Window and type(Window.OnOpen) == "function" then
-                    pcall(function() Window:OnOpen() end)
-                end
-            end
-        end
-    end
-end
-
-keyInputConnection = game:GetService("UserInputService").InputBegan:Connect(handleKeyPress)
-Window:SetIconSize(48)
-Window:Tag({
-    Title = "v1.2.5",
-    Color = Color3.fromHex("#30ff6a")
-})
-
-
---[[
-
--- Disabled fucking beta skid
-Window:Tag({
-Title = "Beta",
-Color = Color3.fromHex("#315dff")
-
-]]
-
-Window:CreateTopbarButton("theme-switcher", "moon", function()
-    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Light" or "Dark")
-end, 990)
-
+-- WindUI removed; Fluent UI will be inserted later.
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -988,6 +683,272 @@ local featureStates = {
     ZoomValue = 1,
     TimerDisplay = false
 }
+
+-- ===== START FLUENT UI INSERT =====
+-- Load Fluent and setup UI mapped to existing variables. This section replaces WindUI UI.
+local ok, Fluent = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+end)
+if not ok or not Fluent then
+    warn("Fluent UI failed to load. UI disabled.")
+else
+    local SaveManager, InterfaceManager
+    pcall(function()
+        SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+        InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+    end)
+
+    local Window = Fluent:CreateWindow({
+        Title = "Dara Hub",
+        SubTitle = "Evade - Fluent UI",
+        TabWidth = 160,
+        Size = UDim2.fromOffset(600, 500),
+        Acrylic = true,
+        Theme = "Dark",
+        MinimizeKey = Enum.KeyCode.LeftControl
+    })
+
+    local Tabs = {
+        Player = Window:AddTab({ Title = "Player", Icon = "user" }),
+        Auto = Window:AddTab({ Title = "Auto", Icon = "zap" }),
+        Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
+        ESP = Window:AddTab({ Title = "ESP", Icon = "target" }),
+        Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+    }
+
+    local Options = Fluent.Options
+
+    -- Helper safe pcall
+    local safeCall = function(f, ...)
+        if type(f) == "function" then
+            pcall(f, ...)
+            return true
+        end
+        return false
+    end
+
+    -- PLAYER TAB
+    do
+        local T = Tabs.Player
+
+        local infJumpToggle = T:AddToggle("InfiniteJump", {
+            Title = "Infinite Jump",
+            Default = featureStates and featureStates.InfiniteJump or false
+        })
+        infJumpToggle:OnChanged(function(val)
+            if featureStates then featureStates.InfiniteJump = val end
+            pcall(function() if _G.ToggleInfiniteJump then _G.ToggleInfiniteJump(val) end end)
+        end)
+
+        local flyToggle = T:AddToggle("Fly", {
+            Title = "Fly",
+            Default = featureStates and featureStates.Fly or false
+        })
+        flyToggle:OnChanged(function(val)
+            if featureStates then featureStates.Fly = val end
+            pcall(function() if _G.SetFly then _G.SetFly(val) end end)
+        end)
+
+        local flySpeed = T:AddSlider("FlySpeed", {
+            Title = "Fly Speed",
+            Description = "Adjust fly speed",
+            Default = featureStates and featureStates.FlySpeed or 5,
+            Min = 1,
+            Max = 50,
+            Rounding = 1,
+            Callback = function(v)
+                if featureStates then featureStates.FlySpeed = v end
+                pcall(function() if _G.UpdateFlySpeed then _G.UpdateFlySpeed(v) end end)
+            end
+        })
+
+        local jumpPower = T:AddSlider("JumpPower", {
+            Title = "Jump Power",
+            Default = featureStates and featureStates.JumpPower or 5,
+            Min = 0,
+            Max = 50,
+            Rounding = 1
+        })
+        jumpPower:OnChanged(function(v)
+            if featureStates then featureStates.JumpPower = v end
+        end)
+
+        local jumpMethod = T:AddDropdown("JumpMethod", {
+            Title = "Jump Method",
+            Values = {"Hold", "Toggle", "Auto"},
+            Multi = false,
+            Default = 1
+        })
+        if featureStates and featureStates.JumpMethod then
+            jumpMethod:SetValue(featureStates.JumpMethod)
+        end
+        jumpMethod:OnChanged(function(v) if featureStates then featureStates.JumpMethod = v end end)
+
+        local tpToggle = T:AddToggle("TPWalk", { Title = "TP WALK", Default = featureStates and featureStates.TPWALK or false })
+        tpToggle:OnChanged(function(v) if featureStates then featureStates.TPWALK = v end end)
+
+        local tpVal = T:AddSlider("TpWalkValue", {
+            Title = "TPWalk Value",
+            Default = (featureStates and (featureStates.TpwalkValue or featureStates.TpwalkValue) ) or 1,
+            Min = 0.1,
+            Max = 10,
+            Rounding = 2
+        })
+        tpVal:OnChanged(function(v) if featureStates then featureStates.TpwalkValue = v end end)
+
+        local afkToggle = T:AddToggle("AntiAFK", { Title = "Anti AFK", Default = featureStates and featureStates.AntiAFK or false })
+        afkToggle:OnChanged(function(v)
+            if featureStates then featureStates.AntiAFK = v end
+            pcall(function() if _G.ToggleAntiAFK then _G.ToggleAntiAFK(v) end end)
+        end)
+
+        T:AddButton({
+            Title = "Rebind Menu Key",
+            Description = "Use original bindKey if available",
+            Callback = function()
+                if type(bindKey) == "function" then
+                    pcall(bindKey)
+                else
+                    Window:Dialog({ Title = "Keybind", Content = "Original bindKey not exposed.", Buttons = {{Title="OK",Callback=function() end}} })
+                end
+            end
+        })
+    end
+
+    -- AUTO TAB
+    do
+        local T = Tabs.Auto
+        local autoCarry = T:AddToggle("AutoCarry", { Title = "Auto Carry", Default = featureStates and featureStates.AutoCarry or false })
+        autoCarry:OnChanged(function(v) if featureStates then featureStates.AutoCarry = v end pcall(function() if _G.ToggleAutoCarry then _G.ToggleAutoCarry(v) end end) end)
+
+        local autoRevive = T:AddToggle("AutoRevive", { Title = "Auto Revive", Default = featureStates and featureStates.AutoRevive or false })
+        autoRevive:OnChanged(function(v) if featureStates then featureStates.AutoRevive = v end pcall(function() if _G.ToggleAutoRevive then _G.ToggleAutoRevive(v) end end) end)
+
+        local autoVote = T:AddToggle("AutoVote", { Title = "Auto Vote", Default = featureStates and featureStates.AutoVote or false })
+        autoVote:OnChanged(function(v) if featureStates then featureStates.AutoVote = v end end)
+
+        local autoMoney = T:AddToggle("AutoMoneyFarm", { Title = "Auto Money Farm", Default = featureStates and featureStates.AutoMoneyFarm or false })
+        autoMoney:OnChanged(function(v) if featureStates then featureStates.AutoMoneyFarm = v end pcall(function() if _G.ToggleMoneyFarm then _G.ToggleMoneyFarm(v) end end) end)
+
+        local autoWin = T:AddToggle("AutoWin", { Title = "Auto Win", Default = featureStates and featureStates.AutoWin or false })
+        autoWin:OnChanged(function(v) if featureStates then featureStates.AutoWin = v end end)
+
+        if SaveManager then
+            T:AddButton({ Title = "Save Config", Description = "Save current settings", Callback = function() pcall(function() SaveManager:SaveConfig() end) end })
+            T:AddButton({ Title = "Load Config", Description = "Load config", Callback = function() pcall(function() SaveManager:LoadConfig() end) end })
+        else
+            T:AddParagraph({ Title = "Config", Content = "SaveManager not available." })
+        end
+    end
+
+    -- VISUALS TAB
+    do
+        local T = Tabs.Visuals
+        local fullBright = T:AddToggle("FullBright", { Title = "FullBright", Default = featureStates and featureStates.FullBright or false })
+        fullBright:OnChanged(function(v) if featureStates then featureStates.FullBright = v end pcall(function() if _G.ToggleFullBright then _G.ToggleFullBright(v) end end) end)
+
+        local noFog = T:AddToggle("NoFog", { Title = "Remove Fog", Default = featureStates and featureStates.NoFog or false })
+        noFog:OnChanged(function(v) if featureStates then featureStates.NoFog = v end pcall(function() if _G.ToggleNoFog then _G.ToggleNoFog(v) end end) end)
+
+        local transparency = T:AddSlider("WindowTransparency", {
+            Title = "Window Transparency",
+            Default = Fluent.TransparencyValue or 0.2,
+            Min = 0,
+            Max = 1,
+            Rounding = 2
+        })
+        transparency:OnChanged(function(v) pcall(function() Fluent.TransparencyValue = v end) end)
+
+        T:AddButton({ Title = "Toggle Theme", Description = "Switch Dark/Light", Callback = function()
+            local current = Fluent.GetCurrentTheme and Fluent:GetCurrentTheme() or Fluent.Theme
+            if Fluent.SetTheme then pcall(function() Fluent:SetTheme(current == "Dark" and "Light" or "Dark") end) end
+        end })
+    end
+
+    -- ESP TAB
+    do
+        local T = Tabs.ESP
+        local esp = featureStates and featureStates.PlayerESP or {}
+
+        local playerBoxes = T:AddToggle("PlayerBoxes", { Title = "Player Boxes", Default = esp.boxes or false })
+        playerBoxes:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.boxes = v end pcall(function() if v and startPlayerESP then startPlayerESP() end if not v and stopPlayerESP then stopPlayerESP() end end) end)
+
+        local playerTracers = T:AddToggle("PlayerTracers", { Title = "Player Tracers", Default = esp.tracers or false })
+        playerTracers:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.tracers = v end end)
+
+        local playerNames = T:AddToggle("PlayerNames", { Title = "Player Name ESP", Default = esp.names or false })
+        playerNames:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.names = v end end)
+
+        local playerDistance = T:AddToggle("PlayerDistance", { Title = "Player Distance ESP", Default = esp.distance or false })
+        playerDistance:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.distance = v end end)
+
+        local rainbowBoxes = T:AddToggle("PlayerRainbowBoxes", { Title = "Rainbow Boxes", Default = esp.rainbowBoxes or false })
+        rainbowBoxes:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.rainbowBoxes = v end end)
+
+        local boxType = T:AddDropdown("PlayerBoxType", { Title = "Box Type", Values = {"2D","3D"}, Multi = false, Default = esp.boxType == "3D" and 2 or 1 })
+        boxType:OnChanged(function(v) if featureStates and featureStates.PlayerESP then featureStates.PlayerESP.boxType = v end end)
+
+        local nb = featureStates and featureStates.NextbotESP or {}
+        local nbBoxes = T:AddToggle("NextbotBoxes", { Title = "Nextbot Boxes", Default = nb.boxes or false })
+        nbBoxes:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.boxes = v end pcall(function() if v and startNextbotESP then startNextbotESP() end if not v and stopNextbotESP then stopNextbotESP() end end) end)
+
+        local nbTracers = T:AddToggle("NextbotTracers", { Title = "Nextbot Tracers", Default = nb.tracers or false })
+        nbTracers:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.tracers = v end end)
+
+        local nbNames = T:AddToggle("NextbotNames", { Title = "Nextbot Names", Default = nb.names or false })
+        nbNames:OnChanged(function(v) if featureStates and featureStates.NextbotESP then featureStates.NextbotESP.names = v end end)
+    end
+
+    -- SETTINGS TAB
+    do
+        local T = Tabs.Settings
+        if InterfaceManager then
+            InterfaceManager:SetLibrary(Fluent)
+            InterfaceManager:SetFolder("DaraHub-Fluent")
+            InterfaceManager:BuildInterfaceSection(T)
+        end
+        if SaveManager then
+            SaveManager:SetLibrary(Fluent)
+            SaveManager:SetFolder("DaraHub-Fluent/configs")
+            SaveManager:BuildConfigSection(T)
+        end
+
+        T:AddParagraph({ Title = "UI", Content = "Fluent UI settings." })
+
+        T:AddButton({ Title = "Close Old UI", Description = "Close remaining old UI", Callback = function()
+            pcall(function() if WindUI and WindUI.Unloaded == false then WindUI.Unloaded = true end end)
+        end })
+
+        T:AddButton({ Title = "Print featureStates (debug)", Description = "Logs the current featureStates table", Callback = function()
+            pcall(function()
+                print("===== featureStates dump =====")
+                local function dump(t, indent)
+                    indent = indent or ""
+                    for k,v in pairs(t) do
+                        if type(v) == "table" then
+                            print(indent..tostring(k)..":")
+                            dump(v, indent.."  ")
+                        else
+                            print(indent..tostring(k)..": "..tostring(v))
+                        end
+                    end
+                end
+                dump(featureStates)
+            end)
+        end })
+
+        local trans = T:AddSlider("UITransparency", { Title = "Window Transparency", Default = Fluent.TransparencyValue or 0.2, Min = 0, Max = 1, Rounding = 2 })
+        trans:OnChanged(function(v) pcall(function() Fluent.TransparencyValue = v end) end)
+    end
+
+    Window:SelectTab(1)
+
+    Fluent:Notify({ Title = "Dara Hub - Fluent", Content = "Fluent UI loaded and mapped.", Duration = 5 })
+end
+
+-- ===== END FLUENT UI INSERT =====
+
+
 -- Variables
 local character, humanoid, rootPart
 local isJumpHeld = false
@@ -3201,7 +3162,7 @@ local JumpCapInput = Tabs.Player:Input({
     })
 })
 
-local StrafeInput = Tabs.Player:Input({
+local StrafeInput = Tabs.Player:AddInput({
     Title = "Strafe Acceleration",
     Icon = "wind",
     Placeholder = "Default 187",
@@ -4196,7 +4157,7 @@ local AutoCrouchModeDropdown = Tabs.Auto:Dropdown({
 })
 local _Players = game:GetService("Players")
 local _LocalPlayer = _Players.LocalPlayer
-local BhopToggle = Tabs.Auto:Toggle({
+local BhopToggle = Tabs.Auto:AddToggle({
     Title = "Bhop",
     Value = false,
     Callback = function(state)
@@ -6451,192 +6412,3 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/r
                 securityPart.CanCollide = true
                 securityPart.Parent = workspace
                 rootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
-
--- ===== ORIGINAL DaraHub-Evade.lua content END =====
-
-
--- ===== Fluent UI Replacement (appended) =====
--- This section replaces WindUI visuals by closing old WindUI window (if present)
--- and creating a Fluent UI window mapped to the script's variables.
-pcall(function()
-    if Window and type(Window.Close) == "function" then
-        pcall(function() Window:Close() end)
-    end
-    if WindUI and type(WindUI.Unloaded) ~= "nil" then
-        pcall(function() WindUI.Unloaded = true end)
-    end
-end)
-
--- Load Fluent (embedded fallback: try github release or raw)
-local Fluent = nil
-local ok, res = pcall(function()
-    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-end)
-if not ok or not res then
-    pcall(function() res = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/main.lua"))() end)
-end
-Fluent = res
-
-if not Fluent then
-    warn("Fluent UI failed to load. UI will not be available.")
-else
-    local SaveManager, InterfaceManager = nil, nil
-    pcall(function()
-        SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-        InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-    end)
-
-    local Window = Fluent:CreateWindow({
-        Title = "Dara Hub",
-        SubTitle = "Evade - Fluent UI",
-        TabWidth = 160,
-        Size = UDim2.fromOffset(600, 520),
-        Acrylic = true,
-        Theme = "Dark",
-        MinimizeKey = Enum.KeyCode.LeftControl
-    })
-
-    local Tabs = {
-        Player = Window:AddTab({ Title = "Player", Icon = "user" }),
-        Auto = Window:AddTab({ Title = "Auto", Icon = "zap" }),
-        Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
-        ESP = Window:AddTab({ Title = "ESP", Icon = "target" }),
-        Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
-    }
-
-    local function tryCallGlobal(name, ...)
-        if type(_G) == "table" and type(_G[name]) == "function" then
-            pcall(_G[name], ...)
-            return true
-        end
-        return false
-    end
-
-    -- Ensure featureStates exists
-    featureStates = featureStates or {}
-
-    -- PLAYER TAB
-    do
-        local T = Tabs.Player
-        local inf = T:AddToggle("InfiniteJump", { Title = "Infinite Jump", Default = featureStates.InfiniteJump or false })
-        inf:OnChanged(function(v) featureStates.InfiniteJump = v; pcall(function() tryCallGlobal("ToggleInfiniteJump", v) end) end)
-
-        local fly = T:AddToggle("Fly", { Title = "Fly", Default = featureStates.Fly or false })
-        fly:OnChanged(function(v) featureStates.Fly = v; pcall(function() tryCallGlobal("SetFly", v) end) end)
-
-        local flySpeed = T:AddSlider("FlySpeed", { Title = "Fly Speed", Default = featureStates.FlySpeed or 5, Min = 1, Max = 100, Rounding = 1 })
-        flySpeed:OnChanged(function(v) featureStates.FlySpeed = v; pcall(function() tryCallGlobal("UpdateFlySpeed", v) end) end)
-
-        local jumpPower = T:AddSlider("JumpPower", { Title = "Jump Power", Default = featureStates.JumpPower or 5, Min = 0, Max = 100, Rounding = 1 })
-        jumpPower:OnChanged(function(v) featureStates.JumpPower = v end)
-
-        local jumpMethod = T:AddDropdown("JumpMethod", { Title = "Jump Method", Values = {"Hold","Toggle","Auto"}, Multi = false, Default = (featureStates.JumpMethod == "Toggle" and 2) or (featureStates.JumpMethod == "Auto" and 3) or 1 })
-        jumpMethod:OnChanged(function(v) featureStates.JumpMethod = v end)
-
-        local tp = T:AddToggle("TPWalk", { Title = "TP WALK", Default = featureStates.TPWALK or false })
-        tp:OnChanged(function(v) featureStates.TPWALK = v end)
-
-        local tpVal = T:AddSlider("TpWalkValue", { Title = "TPWalk Value", Default = tonumber(featureStates.TpwalkValue) or 1, Min = 0.1, Max = 10, Rounding = 2 })
-        tpVal:OnChanged(function(v) featureStates.TpwalkValue = v end)
-
-        local afk = T:AddToggle("AntiAFK", { Title = "Anti AFK", Default = featureStates.AntiAFK or false })
-        afk:OnChanged(function(v) featureStates.AntiAFK = v; pcall(function() tryCallGlobal("ToggleAntiAFK", v) end) end)
-
-        T:AddButton({ Title = "Rebind Menu Key", Description = "Use original bindKey if exposed globally", Callback = function()
-            if type(bindKey) == "function" then pcall(bindKey) else Window:Dialog({ Title = "Keybind", Content = "Original bindKey not exposed. Use original script's keybind.", Buttons = {{ Title = "OK", Callback = function() end }}}) end
-        end })
-    end
-
-    -- AUTO TAB
-    do
-        local T = Tabs.Auto
-        local ac = T:AddToggle("AutoCarry", { Title = "Auto Carry", Default = featureStates.AutoCarry or false })
-        ac:OnChanged(function(v) featureStates.AutoCarry = v; pcall(function() tryCallGlobal("ToggleAutoCarry", v) end) end)
-
-        local ar = T:AddToggle("AutoRevive", { Title = "Auto Revive", Default = featureStates.AutoRevive or false })
-        ar:OnChanged(function(v) featureStates.AutoRevive = v; pcall(function() tryCallGlobal("ToggleAutoRevive", v) end) end)
-
-        local av = T:AddToggle("AutoVote", { Title = "Auto Vote", Default = featureStates.AutoVote or false })
-        av:OnChanged(function(v) featureStates.AutoVote = v end)
-
-        local am = T:AddToggle("AutoMoneyFarm", { Title = "Auto Money Farm", Default = featureStates.AutoMoneyFarm or false })
-        am:OnChanged(function(v) featureStates.AutoMoneyFarm = v; pcall(function() tryCallGlobal("ToggleMoneyFarm", v) end) end)
-
-        local aw = T:AddToggle("AutoWin", { Title = "Auto Win", Default = featureStates.AutoWin or false })
-        aw:OnChanged(function(v) featureStates.AutoWin = v end)
-
-        if SaveManager then
-            T:AddButton({ Title = "Save Config", Description = "Save current settings", Callback = function() pcall(function() SaveManager:SaveConfig() end) end })
-            T:AddButton({ Title = "Load Config", Description = "Load saved config", Callback = function() pcall(function() SaveManager:LoadConfig() end) end })
-        else
-            T:AddParagraph({ Title = "Config", Content = "SaveManager not available. Save/Load disabled." })
-        end
-    end
-
-    -- VISUALS TAB
-    do
-        local T = Tabs.Visuals
-        local fb = T:AddToggle("FullBright", { Title = "FullBright", Default = featureStates.FullBright or false })
-        fb:OnChanged(function(v) featureStates.FullBright = v; pcall(function() tryCallGlobal("ToggleFullBright", v) end) end)
-
-        local nf = T:AddToggle("NoFog", { Title = "Remove Fog", Default = featureStates.NoFog or false })
-        nf:OnChanged(function(v) featureStates.NoFog = v; pcall(function() tryCallGlobal("ToggleNoFog", v) end) end)
-
-        local trans = T:AddSlider("WindowTransparency", { Title = "Window Transparency", Default = Fluent.TransparencyValue or 0.2, Min = 0, Max = 1, Rounding = 2 })
-        trans:OnChanged(function(v) Fluent.TransparencyValue = v end)
-
-        T:AddButton({ Title = "Toggle Theme", Description = "Switch Dark/Light", Callback = function() local current = Fluent.GetCurrentTheme and Fluent:GetCurrentTheme() or Fluent.Theme; if Fluent.SetTheme then pcall(function() Fluent:SetTheme((current=="Dark") and "Light" or "Dark") end) end end })
-    end
-
-    -- ESP TAB
-    do
-        local T = Tabs.ESP
-        local esp = featureStates.PlayerESP or {}
-
-        local pb = T:AddToggle("PlayerBoxes", { Title = "Player Boxes", Default = esp.boxes or false })
-        pb:OnChanged(function(v) featureStates.PlayerESP.boxes = v; pcall(function() if v then tryCallGlobal("startPlayerESP") else tryCallGlobal("stopPlayerESP") end end) end)
-
-        local pt = T:AddToggle("PlayerTracers", { Title = "Player Tracers", Default = esp.tracers or false })
-        pt:OnChanged(function(v) featureStates.PlayerESP.tracers = v end)
-
-        local pn = T:AddToggle("PlayerNames", { Title = "Player Name ESP", Default = esp.names or false })
-        pn:OnChanged(function(v) featureStates.PlayerESP.names = v end)
-
-        local pd = T:AddToggle("PlayerDistance", { Title = "Player Distance ESP", Default = esp.distance or false })
-        pd:OnChanged(function(v) featureStates.PlayerESP.distance = v end)
-
-        local rb = T:AddToggle("PlayerRainbowBoxes", { Title = "Rainbow Boxes", Default = esp.rainbowBoxes or false })
-        rb:OnChanged(function(v) featureStates.PlayerESP.rainbowBoxes = v end)
-
-        local bt = T:AddDropdown("PlayerBoxType", { Title = "Box Type", Values = {"2D","3D"}, Multi = false, Default = (esp.boxType=="3D" and 2) or 1 })
-        bt:OnChanged(function(v) featureStates.PlayerESP.boxType = v end)
-
-        local nb = featureStates.NextbotESP or {}
-        local nbb = T:AddToggle("NextbotBoxes", { Title = "Nextbot Boxes", Default = nb.boxes or false })
-        nbb:OnChanged(function(v) featureStates.NextbotESP.boxes = v end)
-        local nbt = T:AddToggle("NextbotTracers", { Title = "Nextbot Tracers", Default = nb.tracers or false })
-        nbt:OnChanged(function(v) featureStates.NextbotESP.tracers = v end)
-        local nbn = T:AddToggle("NextbotNames", { Title = "Nextbot Names", Default = nb.names or false })
-        nbn:OnChanged(function(v) featureStates.NextbotESP.names = v end)
-    end
-
-    -- SETTINGS TAB
-    do
-        local T = Tabs.Settings
-        if InterfaceManager then InterfaceManager:SetLibrary(Fluent); InterfaceManager:SetFolder("DaraHub-Fluent"); InterfaceManager:BuildInterfaceSection(T) end
-        if SaveManager then SaveManager:SetLibrary(Fluent); SaveManager:SetFolder("DaraHub-Fluent/configs"); SaveManager:BuildConfigSection(T) end
-
-        T:AddParagraph({ Title = "UI", Content = "Fluent UI settings." })
-
-        T:AddButton({ Title = "Close Old UI", Description = "Try to close any remaining old UI instances", Callback = function() pcall(function() if Window and type(Window.Close) == "function" then Window:Close() end; if WindUI and type(WindUI.Unloaded)~="nil" then WindUI.Unloaded = true end end) end })
-
-        T:AddButton({ Title = "Print featureStates (debug)", Description = "Logs the current featureStates table", Callback = function() pcall(function() print("===== featureStates dump ====="); local function dump(t, indent) indent = indent or ""; for k,v in pairs(t) do if type(v)=="table" then print(indent..tostring(k)..":"); dump(v, indent.."  ") else print(indent..tostring(k)..": "..tostring(v)) end end end; dump(featureStates) end) end })
-
-        local trans2 = T:AddSlider("UITransparency", { Title = "Window Transparency", Default = Fluent.TransparencyValue or 0.2, Min = 0, Max = 1, Rounding = 2 })
-        trans2:OnChanged(function(v) Fluent.TransparencyValue = v end)
-    end
-
-    Window:SelectTab(1)
-    Fluent:Notify({ Title = "Dara Hub - Fluent", Content = "Fluent UI loaded and mapped to variables.", Duration = 6 })
-end
--- ===== End Fluent UI Replacement =====
