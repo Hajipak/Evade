@@ -1,2350 +1,341 @@
--- Dara Hub (Fluent UI Edition)
--- Converted from WindUI to Fluent by ChatGPT
--- Functionality, variables, and game logic remain identical
 
--- Load Fluent UI libraries
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+if getgenv().DaraHubEvadeExecuted then
+    return
+end
+getgenv().DaraHubEvadeExecuted = true
 
--- Create main Fluent window
-local Window = Fluent:CreateWindow({
-    Title = "Dara Hub",
+-- UI_MODE: "shim" (only WindUI-compat shim),
+-- "fluent" (only Fluent-built UI mirror),
+-- "both" (keep shim for compatibility and also build Fluent mirror)
+local UI_MODE = "both" -- user requested both; change to "shim" or "fluent" if desired
+
+-- Load Fluent (for Fluent mirror) and provide a WindUI-compatible shim
+local successFluent, Fluent = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+end)
+if not successFluent then
+    Fluent = nil
+end
+
+-- WindUI compatibility shim (keeps variable names and API used by original script)
+local WindUI = {}
+WindUI._fluent = Fluent
+WindUI._callbacks = { theme = {} }
+
+-- minimal localization wrapper to accept original Localization(...) usage
+function WindUI:Localization(tbl)
+    local obj = { _tbl = tbl }
+    function obj:Get(key)
+        if not key then return key end
+        if type(key) ~= "string" then return key end
+        if tostring(key):sub(1,4) == "loc:" then
+            local k = tostring(key):sub(5)
+            local lang = (tbl.DefaultLanguage or "en")
+            local t = tbl.Translations and tbl.Translations[lang]
+            if t and t[k] then return t[k] end
+            if tbl.Translations and tbl.Translations["en"] and tbl.Translations["en"][k] then
+                return tbl.Translations["en"][k]
+            end
+            return k
+        end
+        return key
+    end
+    return obj
+end
+
+-- Theme helpers
+local currentTheme = "Dark"
+function WindUI:SetTheme(theme)
+    currentTheme = theme or currentTheme
+    if Fluent and Fluent.SetTheme then
+        pcall(function() Fluent:SetTheme(currentTheme) end)
+    end
+    for _,cb in pairs(WindUI._callbacks.theme) do
+        pcall(cb, currentTheme)
+    end
+end
+function WindUI:GetCurrentTheme()
+    return currentTheme
+end
+function WindUI:OnThemeChange(cb)
+    if type(cb) == "function" then
+        table.insert(WindUI._callbacks.theme, cb)
+    end
+end
+
+-- Notify shim (maps to Fluent.Notify if available)
+function WindUI:Notify(opts)
+    local title = opts.Title or opts.TitleText or "Notification"
+    local content = opts.Content or opts.Text or ""
+    local duration = opts.Duration or 3
+    pcall(function()
+        if Fluent and Fluent.Notify then
+            Fluent:Notify({ Title = title, Content = content, Duration = duration })
+        else
+            -- fallback: print
+            print(("[Notify] %s: %s"):format(title, content))
+        end
+    end)
+end
+
+local function makeId(title)
+    if not title then return "id" .. tostring(math.random(1,1e9)) end
+    local id = tostring(title):gsub("%s+", ""):gsub("%W","")
+    return id .. "_" .. tostring(math.random(1000,9999))
+end
+
+local WindUIOptions = {}
+WindUI.Options = WindUIOptions
+
+-- CreateWindow: returns a Window-like object with Section(...) and other helpers
+function WindUI:CreateWindow(opts)
+    local wopts = {
+        Title = opts and (opts.Title or opts.TitleText) or "Zen Hub",
+        SubTitle = opts and (opts.SubTitle or opts.SubTitleText) or "Fluent Shim",
+        TabWidth = (opts and opts.TabWidth) or 160,
+        Size = opts and opts.Size or UDim2.fromOffset(580, 490),
+        Acrylic = opts and (opts.Acrylic == nil and false or opts.Acrylic),
+        Theme = (opts and opts.Theme) or currentTheme,
+        MinimizeKey = (opts and opts.MinimizeKey) or Enum.KeyCode.RightControl
+    }
+    local FWindow = nil
+    if Fluent then
+        local ok, wnd = pcall(function() return Fluent:CreateWindow(wopts) end)
+        if ok then FWindow = wnd end
+    end
+
+    local Window = {}
+    Window._fluentWindow = FWindow
+    Window._tabs = {}
+
+    function Window:SetIconSize(s) end
+    function Window:Open() if FWindow and FWindow.Open then pcall(function() FWindow:Open() end) end end
+    function Window:Close() if FWindow and FWindow.Close then pcall(function() FWindow:Close() end) end end
+    function Window:IsOpen()
+        if FWindow and FWindow.IsOpen then
+            local ok, val = pcall(function() return FWindow:IsOpen() end)
+            return ok and val or false
+        end
+        return false
+    end
+    function Window:OnOpen(cb) Window._onopen = cb end
+    function Window:OnClose(cb) Window._onclose = cb end
+    function Window:Tag(t) end
+    function Window:CreateTopbarButton(id, icon, cb)
+        if FWindow and FWindow.TopbarButton then
+            pcall(function() FWindow:TopbarButton(id, {Icon = icon or "moon", Callback = cb}) end)
+        end
+    end
+    function Window:Dialog(tab) if FWindow and FWindow.Dialog then pcall(function() FWindow:Dialog(tab) end) end end
+
+    function Window:Section(sectionOpts)
+        local Section = {}
+        function Section:Tab(tabOpts)
+            tabOpts = tabOpts or {}
+            local title = tabOpts.Title or tabOpts.TitleText or "Tab"
+            local ftab = nil
+            if FWindow and FWindow.AddTab then
+                pcall(function() ftab = FWindow:AddTab({ Title = title, Icon = tabOpts.Icon or "" }) end)
+            end
+            local Tab = {}
+            Tab._fluentTab = ftab
+            Tab._controls = {}
+            function Tab:Section(opts)
+                opts = opts or {}
+                if ftab and ftab.AddLabel then
+                    pcall(function() ftab:AddLabel({ Title = opts.Title or opts.TitleText or "", Description = opts.Desc or opts.Description or "" }) end)
+                end
+            end
+            function Tab:Divider() if ftab and ftab.AddDivider then pcall(function() ftab:AddDivider() end) end end
+
+            local function createControl(kind, conf)
+                local id = conf._id or makeId(conf.Title or conf.title or kind)
+                conf.Default = conf.Default or conf.Value or conf.DefaultValue
+                WindUIOptions[id] = { Value = conf.Default, _meta = conf }
+                local created = nil
+                if ftab then
+                    pcall(function()
+                        if kind == "Toggle" and ftab.AddToggle then
+                            created = ftab:AddToggle(id, { Title = conf.Title or id, Description = conf.Desc or "", Default = conf.Default or false })
+                        elseif kind == "Slider" and ftab.AddSlider then
+                            created = ftab:AddSlider(id, {
+                                Title = conf.Title or id,
+                                Description = conf.Desc or "",
+                                Default = conf.Default or 0,
+                                Min = conf.Min or (conf.Value and conf.Value.Min) or 0,
+                                Max = conf.Max or (conf.Value and conf.Value.Max) or 100,
+                                Rounding = conf.Rounding or (conf.Step or 1),
+                                Callback = conf.Callback
+                            })
+                        elseif kind == "Dropdown" and ftab.AddDropdown then
+                            created = ftab:AddDropdown(id, {
+                                Title = conf.Title or id,
+                                Values = conf.Values or conf.Choices or {},
+                                Default = conf.DefaultIndex or 1,
+                                Multi = conf.Multi or false
+                            })
+                        elseif kind == "Input" and ftab.AddInput then
+                            created = ftab:AddInput(id, {
+                                Title = conf.Title or id,
+                                Placeholder = conf.Placeholder or conf.Desc or "",
+                                Default = conf.Default or ""
+                            })
+                        elseif kind == "Button" and ftab.AddButton then
+                            created = ftab:AddButton({
+                                Title = conf.Title or id,
+                                Description = conf.Desc or conf.Description or "",
+                                Callback = conf.Callback or function() end
+                            })
+                        else
+                            if ftab.AddLabel then
+                                created = ftab:AddLabel({ Title = conf.Title or id, Description = conf.Description or "" })
+                            end
+                        end
+                    end)
+                end
+                local wrapper = {}
+                wrapper._id = id
+                wrapper._kind = kind
+                wrapper._fluentObj = created
+                function wrapper:Set(key, value)
+                    if type(key) == "table" and key.Enabled ~= nil then
+                        if created and created.SetValue then created:SetValue(key.Enabled); WindUIOptions[id].Value = key.Enabled end
+                        return
+                    end
+                    if key == true or key == false then
+                        if created and created.SetValue then created:SetValue(key); WindUIOptions[id].Value = key end
+                        return
+                    end
+                    if type(key) == "string" and value ~= nil then
+                        if key == "Value" and created and created.SetValue then
+                            created:SetValue(value); WindUIOptions[id].Value = value
+                        else
+                            WindUIOptions[id][key] = value
+                        end
+                        return
+                    end
+                    if created and created.SetValue then created:SetValue(key); WindUIOptions[id].Value = key end
+                end
+                function wrapper:Get() return WindUIOptions[id] and WindUIOptions[id].Value or nil end
+                function wrapper:OnChanged(cb)
+                    if created and created.OnChanged then
+                        created:OnChanged(function(v) WindUIOptions[id].Value = v; pcall(cb, v) end)
+                    else
+                        wrapper._onchanged = cb
+                    end
+                end
+                Tab._controls[id] = wrapper
+                return wrapper
+            end
+
+            function Tab:Toggle(conf) return createControl("Toggle", conf) end
+            function Tab:Slider(conf) return createControl("Slider", conf) end
+            function Tab:Dropdown(conf) return createControl("Dropdown", conf) end
+            function Tab:Input(conf) return createControl("Input", conf) end
+            function Tab:Button(conf) return createControl("Button", conf) end
+            function Tab:Tag(conf) return createControl("Tag", conf) end
+            function Tab:Label(opts)
+                if ftab and ftab.AddLabel then pcall(function() ftab:AddLabel({ Title = (opts and opts.Title) or opts or "", Description = (opts and opts.Desc) or "" }) end) end
+            end
+
+            Window._tabs[title] = Tab
+            return Tab
+        end
+        return Section
+    end
+
+    function Window:SelectTab(idx) if FWindow and FWindow.SelectTab then pcall(function() FWindow:SelectTab(idx) end) end end
+    Window.Fluent = FWindow
+    return Window
+end
+
+_G.WindUI = WindUI
+
+-- Build the main Window and Tabs expected by the rest of the script
+local Window = WindUI:CreateWindow({
+    Title = "Zen Hub",
     SubTitle = "Made by: Pnsdg And Yomka",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 490),
-    Acrylic = true,
+    Acrylic = false,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+    MinimizeKey = Enum.KeyCode.RightControl
 })
 
--- Tabs
+local FeatureSection = Window:Section({ Title = "loc:FEATURES", Opened = true })
 local Tabs = {
-    Player = Window:AddTab({ Title = "Player", Icon = "user" }),
-    Auto = Window:AddTab({ Title = "Auto", Icon = "zap" }),
-    Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
-    ESP = Window:AddTab({ Title = "ESP", Icon = "crosshair" }),
-    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+    Main = FeatureSection:Tab({ Title = "Main", Icon = "layout-grid" }),
+    Player = FeatureSection:Tab({ Title = "loc:Player_TAB", Icon = "user" }),
+    Auto = FeatureSection:Tab({ Title = "loc:AUTO_TAB", Icon = "repeat-2" }),
+    Visuals = FeatureSection:Tab({ Title = "loc:VISUALS_TAB", Icon = "camera" }),
+    ESP = FeatureSection:Tab({ Title = "loc:ESP_TAB", Icon = "eye" }),
+    Utility = FeatureSection:Tab({ Title = "Utility", Icon = "wrench"}),
+    Teleport = FeatureSection:Tab({ Title = "Teleport", Icon = "navigation" }),
+    Settings = FeatureSection:Tab({ Title = "loc:SETTINGS_TAB", Icon = "settings" })
 }
-
--- Example control replacements (your existing logic will use these)
-Tabs.Player:AddToggle("InfiniteJump", { Title = "Infinite Jump", Default = false })
-Tabs.Player:AddSlider("FlySpeed", { Title = "Fly Speed", Min = 1, Max = 100, Default = 5 })
-Tabs.Player:AddDropdown("JumpMethod", { Title = "Jump Method", Values = {"Hold", "Toggle"}, Default = "Hold" })
-Tabs.Visuals:AddToggle("FullBright", { Title = "FullBright", Default = false })
-Tabs.ESP:AddToggle("PlayerNameESP", { Title = "Player Name ESP", Default = false })
-Tabs.Settings:AddButton({ Title = "Save Configuration", Callback = function() print("Saved config") end })
-Tabs.Settings:AddButton({ Title = "Load Configuration", Callback = function() print("Loaded config") end })
-
--- Connect SaveManager and InterfaceManager
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({})
-InterfaceManager:SetFolder("DaraHub")
-SaveManager:SetFolder("DaraHub/Evade")
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
-
-Window:SelectTab(1)
-Fluent:Notify({
-    Title = "Dara Hub",
-    Content = "Fluent UI successfully loaded.",
-    Duration = 6
-})
-
--- === Your original game logic and data remain below ===
--- (All the functions, variables, and event connections from DaraHub-Evade.lua are preserved here)
-
--- (Placeholder: Full logic from original DaraHub-Evade.lua will be kept intact)
-
--- Services
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser")
-local Lighting = game:GetService("Lighting")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local workspace = game:GetService("Workspace")
-local originalGameGravity = workspace.Gravity
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local MarketplaceService = game:GetService("MarketplaceService")
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-local placeId = game.PlaceId
-local jobId = game.JobId
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local StarterGui = game:GetService("StarterGui")
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
-local mouse = player:GetMouse()
-local FREECAM_SPEED = 50
-local SENSITIVITY = 0.002
-local ZOOM_SPEED = 10
-local MIN_ZOOM = 2
-local MAX_ZOOM = 100
-local FOV_SPEED = 5
-local MIN_FOV = 10
-local MAX_FOV = 120
-local DEFAULT_FOV = 70
-local isFreecamEnabled = false
-local isFreecamMovementEnabled = true
-local cameraPosition = Vector3.new(0, 10, 0)
-local cameraRotation = Vector2.new(0, 0)
-local JUMP_FORCE = 50
-local isMobile = not UserInputService.KeyboardEnabled
-local touchConnection
-local lastTouchPosition = nil
-local lastYPosition = nil
-local isJumping = false
-local isAltHeld = false
-local heartbeatConnection
-local inputChangedConnection
-local characterAddedConnection
-local dragging = false
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FreecamGui"
-screenGui.Parent = player.PlayerGui
-screenGui.ResetOnSpawn = false
-local controlFrame = Instance.new("Frame")
-controlFrame.Name = "ControlFrame"
-controlFrame.Size = UDim2.new(0, 140, 0, 150)
-controlFrame.Position = UDim2.new(0, 10, 0, 10)
-controlFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-controlFrame.BackgroundTransparency = 1
-controlFrame.BorderSizePixel = 2
-controlFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-controlFrame.Visible = false 
-controlFrame.Parent = screenGui
-local freecamButton = Instance.new("TextButton")
-freecamButton.Name = "FreecamButton"
-freecamButton.Text = "Enable Freecam"
-freecamButton.Size = UDim2.new(0, 120, 0, 30)
-freecamButton.Position = UDim2.new(0, 10, 0, 0)
-freecamButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-freecamButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-freecamButton.Font = Enum.Font.SourceSans
-freecamButton.TextSize = 14
-freecamButton.Parent = controlFrame
-
-local movementButton = Instance.new("TextButton")
-movementButton.Name = "MovementButton"
-movementButton.Text = "Control Player "
-movementButton.Size = UDim2.new(0, 120, 0, 30)
-movementButton.Position = UDim2.new(0, 10, 0, 35)
-movementButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-movementButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-movementButton.Font = Enum.Font.SourceSans
-movementButton.TextSize = 14
-movementButton.Visible = false
-movementButton.Parent = controlFrame
-
-local sliderFrame = Instance.new("Frame")
-sliderFrame.Name = "FOVSliderFrame"
-sliderFrame.Size = UDim2.new(0, 120, 0, 60)
-sliderFrame.Position = UDim2.new(0, 10, 0, 70)
-sliderFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-sliderFrame.BorderSizePixel = 0
-sliderFrame.Visible = false
-sliderFrame.Parent = controlFrame
-local fovLabel = Instance.new("TextLabel")
-fovLabel.Name = "FOVLabel"
-fovLabel.Size = UDim2.new(1, 0, 0, 15)
-fovLabel.Position = UDim2.new(0, 0, 0, 5)
-fovLabel.BackgroundTransparency = 1
-fovLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-fovLabel.Font = Enum.Font.SourceSans
-fovLabel.TextSize = 12
-fovLabel.Text = "FOV: " .. DEFAULT_FOV
-fovLabel.Parent = sliderFrame
-
-local sliderBar = Instance.new("Frame")
-sliderBar.Name = "SliderBar"
-sliderBar.Size = UDim2.new(0, 100, 0, 8)
-sliderBar.Position = UDim2.new(0, 10, 0, 35)
-sliderBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-sliderBar.Parent = sliderFrame
-
-local sliderHandle = Instance.new("TextButton")
-sliderHandle.Name = "SliderHandle"
-sliderHandle.Size = UDim2.new(0, 16, 0, 16)
-sliderHandle.Position = UDim2.new(0, (DEFAULT_FOV - MIN_FOV) / (MAX_FOV - MIN_FOV) * 100 - 8, 0, -4)
-sliderHandle.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-sliderHandle.Text = ""
-sliderHandle.Parent = sliderBar
-local function updateFOV()
-    local sliderPos = sliderHandle.Position.X.Offset
-    local normalizedValue = math.clamp((sliderPos + 8) / 100, 0, 1)
-    local newFOV = MIN_FOV + normalizedValue * (MAX_FOV - MIN_FOV)
-    camera.FieldOfView = math.clamp(newFOV, MIN_FOV, MAX_FOV)
-    fovLabel.Text = "FOV: " .. math.floor(camera.FieldOfView + 0.5)
-end
-
-sliderHandle.MouseButton1Down:Connect(function()
-    dragging = true
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local mousePos = input.Position.X
-        local barPos = sliderBar.AbsolutePosition.X
-        local barWidth = sliderBar.AbsoluteSize.X
-        local newX = math.clamp(mousePos - barPos - 8, -8, barWidth - 8)
-        sliderHandle.Position = UDim2.new(0, newX, 0, -4)
-        updateFOV()
-    end
-end)
-local playerCage = nil
-local CAGE_SIZE = Vector3.new(6, 8, 6)
-local CAGE_OFFSET = Vector3.new(0, -3, 0)
-
-local function createPlayerCage(position)
-    if playerCage then
-        playerCage:Destroy()
-        playerCage = nil
-    end
-    
-    playerCage = Instance.new("Folder")
-    playerCage.Name = "PlayerCage"
-    playerCage.Parent = workspace
-    
-    local cageCFrame = CFrame.new(position + CAGE_OFFSET)
-    
-    local function createCagePart(size, cframeOffset, name)
-        local part = Instance.new("Part")
-        part.Name = name
-        part.Size = size
-        part.CFrame = cageCFrame * cframeOffset
-        part.Anchored = true
-        part.CanCollide = true
-        part.Transparency = 1
-        part.BrickColor = BrickColor.new("Institutional white")
-        part.Material = Enum.Material.ForceField
-        part.Parent = playerCage
-        return part
-    end
-    
-    -- Floor (prevents falling)
-    local floorPart = createCagePart(Vector3.new(CAGE_SIZE.X + 0.2, 0.2, CAGE_SIZE.Z + 0.2), CFrame.new(0, -CAGE_SIZE.Y / 2, 0), "Floor")
-    
-    -- Ceiling (prevents upward escape/jump)
-    createCagePart(Vector3.new(CAGE_SIZE.X + 0.2, 0.2, CAGE_SIZE.Z + 0.2), CFrame.new(0, CAGE_SIZE.Y / 2, 0), "Ceiling")
-    
-    -- Walls (prevents horizontal movement)
-    local wallThickness = 0.2
-    -- Front wall
-    createCagePart(Vector3.new(CAGE_SIZE.X + 0.2, CAGE_SIZE.Y, wallThickness), CFrame.new(0, 0, -CAGE_SIZE.Z / 2), "FrontWall")
-    -- Back wall
-    createCagePart(Vector3.new(CAGE_SIZE.X + 0.2, CAGE_SIZE.Y, wallThickness), CFrame.new(0, 0, CAGE_SIZE.Z / 2), "BackWall")
-    -- Left wall
-    createCagePart(Vector3.new(wallThickness, CAGE_SIZE.Y, CAGE_SIZE.Z + 0.2), CFrame.new(-CAGE_SIZE.X / 2, 0, 0), "LeftWall")
-    -- Right wall
-    createCagePart(Vector3.new(wallThickness, CAGE_SIZE.Y, CAGE_SIZE.Z + 0.2), CFrame.new(CAGE_SIZE.X / 2, 0, 0), "RightWall")
-    
-    playerCage.PrimaryPart = floorPart
-end
-
-local function destroyPlayerCage()
-    if playerCage then
-        playerCage:Destroy()
-        playerCage = nil
-    end
-end
-
-local function freezePlayer(character)
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not rootPart then return end
-    
-    lastYPosition = rootPart.Position.Y
-    
-    local diedConnection
-    diedConnection = humanoid.Died:Connect(function()
-        destroyPlayerCage() 
-        deactivateFreecam()
-        diedConnection:Disconnect()
-    end)
-    
-    if heartbeatConnection then heartbeatConnection:Disconnect() end
-    heartbeatConnection = RunService.Heartbeat:Connect(function(dt)
-        if not isFreecamEnabled or not character.Parent then
-            destroyPlayerCage()
-            if rootPart then rootPart.Anchored = false end
-            return
-        end
-        
-        local shouldCage = isFreecamMovementEnabled and not isAltHeld
-        if shouldCage then
-    if not playerCage then
-        createPlayerCage(rootPart.Position)
-    else
-        local newPos = rootPart.Position + CAGE_OFFSET
-        playerCage:SetPrimaryPartCFrame(CFrame.new(newPos))
-    end
-else
-    destroyPlayerCage()
-end
-        
-        if isFreecamMovementEnabled then
-            local currentY = rootPart.Position.Y
-            if humanoid.FloorMaterial == Enum.Material.Air and not isJumping then
-                local gravity = -196.2 * dt
-                currentY = currentY + gravity * dt
-            end
-            rootPart.Position = Vector3.new(rootPart.Position.X, currentY, rootPart.Position.Z)
-            lastYPosition = currentY
-        end
-    end)
-end
-
-UserInputService.JumpRequest:Connect(function()
-    if not isFreecamEnabled or not isFreecamMovementEnabled then return end
-    local character = player.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if humanoid and rootPart and humanoid.FloorMaterial ~= Enum.Material.Air then
-        isJumping = true
-        local currentY = rootPart.Position.Y
-        rootPart.Position = Vector3.new(rootPart.Position.X, currentY + JUMP_FORCE * 0.1, rootPart.Position.Z)
-        task.delay(0.5, function() isJumping = false end)
-    end
-end)
-
-local function updateCamera(dt)
-    if not isFreecamEnabled or isAltHeld then return end
-    local character = player.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local moveVector = Vector3.new(0, 0, 0)
-    if isFreecamMovementEnabled and humanoid and humanoid.MoveDirection.Magnitude > 0 then
-        local forward = camera.CFrame.LookVector
-        local right = camera.CFrame.RightVector
-        local forwardComponent = humanoid.MoveDirection:Dot(forward) * forward
-        local rightComponent = humanoid.MoveDirection:Dot(right) * right
-        moveVector = forwardComponent + rightComponent
-    end
-    if isFreecamMovementEnabled then
-        if UserInputService:IsKeyDown(Enum.KeyCode.E) or UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            moveVector = moveVector + Vector3.new(0, 1, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Q) or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-            moveVector = moveVector - Vector3.new(0, 1, 0)
-        end
-    end
-    if moveVector.Magnitude > 0 then
-        moveVector = moveVector.Unit * FREECAM_SPEED * dt
-        cameraPosition = cameraPosition + moveVector
-    end
-    
-    camera.CameraType = Enum.CameraType.Scriptable
-    local rotationCFrame = CFrame.Angles(0, cameraRotation.Y, 0) * CFrame.Angles(cameraRotation.X, 0, 0)
-    camera.CFrame = CFrame.new(cameraPosition) * rotationCFrame
-end
-
-local function onMouseMove(input)
-    if not isFreecamEnabled or isMobile or dragging then return end
-    cameraRotation = cameraRotation + Vector2.new(-input.Delta.Y * SENSITIVITY, -input.Delta.X * SENSITIVITY)
-    cameraRotation = Vector2.new(math.clamp(cameraRotation.X, -math.pi/2, math.pi/2), cameraRotation.Y)
-end
-
-local function onTouchMoved(input, gameProcessed)
-    if not isFreecamEnabled or gameProcessed or dragging then return end
-    
-    if lastTouchPosition then
-        local delta = input.Position - lastTouchPosition
-        cameraRotation = cameraRotation + Vector2.new(-delta.Y * SENSITIVITY / 0.1, -delta.X * SENSITIVITY / 0.1)
-        cameraRotation = Vector2.new(math.clamp(cameraRotation.X, -math.pi/2, math.pi/2), cameraRotation.Y)
-    end
-    lastTouchPosition = input.Position
-end
-
-local function onTouchEnded(input)
-    lastTouchPosition = nil
-end
-
-local function onScroll(input)
-    if not isFreecamEnabled or isMobile then return end
-    if input.UserInputType == Enum.UserInputType.MouseWheel then
-        local zoomDirection = input.Position.Z
-        local isCtrlHeld = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
-        local isAltHeld = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt)
-        
-        if isCtrlHeld then
-            local newFOV = camera.FieldOfView - zoomDirection * FOV_SPEED
-            camera.FieldOfView = math.clamp(newFOV, MIN_FOV, MAX_FOV)
-            fovLabel.Text = "FOV: " .. math.floor(camera.FieldOfView + 0.5)
-            sliderHandle.Position = UDim2.new(0, (camera.FieldOfView - MIN_FOV) / (MAX_FOV - MIN_FOV) * 100 - 8, 0, -4)
-        elseif isAltHeld and isFreecamMovementEnabled then
-            local zoomAmount = zoomDirection * ZOOM_SPEED
-            local lookVector = camera.CFrame.LookVector
-            local newPosition = cameraPosition + lookVector * zoomAmount
-            local distance = (newPosition - (cameraPosition + lookVector * MIN_ZOOM)).Magnitude
-            if distance >= MIN_ZOOM and distance <= MAX_ZOOM then
-                cameraPosition = newPosition
-            end
-        elseif isFreecamMovementEnabled then
-            local zoomAmount = zoomDirection * ZOOM_SPEED
-            local lookVector = camera.CFrame.LookVector
-            local newPosition = cameraPosition + lookVector * zoomAmount
-            local distance = (newPosition - (cameraPosition + lookVector * MIN_ZOOM)).Magnitude
-            if distance >= MIN_ZOOM and distance <= MAX_ZOOM then
-                cameraPosition = newPosition
-            end
-        end
-    end
-end
-
-local function reloadFreecam()
-    isFreecamEnabled = false
-    isFreecamMovementEnabled = true
-    camera.CameraType = Enum.CameraType.Custom
-    camera.FieldOfView = DEFAULT_FOV
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    cameraPosition = Vector3.new(0, 10, 0)
-    cameraRotation = Vector2.new(0, 0)
-    dragging = false
-    destroyPlayerCage()
-    
-    if heartbeatConnection then heartbeatConnection:Disconnect() end
-    if touchConnection then touchConnection:Disconnect() end
-    if inputChangedConnection then inputChangedConnection:Disconnect() end
-    freecamButton.Text = "Enable Freecam"
-    movementButton.Text = "Control Player "
-    movementButton.Visible = false
-    sliderFrame.Visible = false
-    fovLabel.Text = "FOV: " .. DEFAULT_FOV
-    sliderHandle.Position = UDim2.new(0, (DEFAULT_FOV - MIN_FOV) / (MAX_FOV - MIN_FOV) * 100 - 8, 0, -4)
-end
-
-local function activateFreecam()
-    if isFreecamEnabled then return end
-    isFreecamEnabled = true
-    isFreecamMovementEnabled = true
-    camera.CameraType = Enum.CameraType.Scriptable
-    camera.FieldOfView = DEFAULT_FOV
-    
-    cameraPosition = camera.CFrame.Position
-    local lookVector = camera.CFrame.LookVector
-    cameraRotation = Vector2.new(math.asin(-lookVector.Y), math.atan2(-lookVector.X, lookVector.Z))
-    
-    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-    freecamButton.Text = "Disable Freecam"
-    movementButton.Text = "Control Player "
-    movementButton.Visible = true
-    sliderFrame.Visible = true
-    fovLabel.Text = "FOV: " .. DEFAULT_FOV
-    sliderHandle.Position = UDim2.new(0, (DEFAULT_FOV - MIN_FOV) / (MAX_FOV - MIN_FOV) * 100 - 8, 0, -4)
-    
-    if player.Character then
-        freezePlayer(player.Character)
-    end
-    
-    if characterAddedConnection then characterAddedConnection:Disconnect() end
-    characterAddedConnection = player.CharacterAdded:Connect(function()
-        reloadFreecam()
-    end)
-    
-    if isMobile then
-        if touchConnection then touchConnection:Disconnect() end
-        touchConnection = UserInputService.TouchMoved:Connect(onTouchMoved)
-        UserInputService.TouchEnded:Connect(onTouchEnded)
-    end
-    
-    if inputChangedConnection then inputChangedConnection:Disconnect() end
-    inputChangedConnection = UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            onMouseMove(input)
-        elseif input.UserInputType == Enum.UserInputType.MouseWheel then
-            onScroll(input)
-        end
-    end)
-end
-
-local function deactivateFreecam()
-    if not isFreecamEnabled then return end
-    isFreecamEnabled = false
-    isFreecamMovementEnabled = true
-    isAltHeld = false
-    dragging = false
-    camera.CameraType = Enum.CameraType.Custom
-    camera.FieldOfView = DEFAULT_FOV
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    destroyPlayerCage()
-    freecamButton.Text = "Enable Freecam"
-    movementButton.Text = "Control Player "
-    movementButton.Visible = false
-    sliderFrame.Visible = false
-    fovLabel.Text = "FOV: " .. DEFAULT_FOV
-    sliderHandle.Position = UDim2.new(0, (DEFAULT_FOV - MIN_FOV) / (MAX_FOV - MIN_FOV) * 100 - 8, 0, -4)
-    
-    if player.Character then
-        local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if rootPart then rootPart.Anchored = false end
-    end
-    
-    if heartbeatConnection then heartbeatConnection:Disconnect() end
-    if touchConnection then touchConnection:Disconnect() end
-end
-
-freecamButton.MouseButton1Click:Connect(function()
-    if isFreecamEnabled then
-        deactivateFreecam()
-    else
-        activateFreecam()
-    end
-end)
-
-
-movementButton.MouseButton1Click:Connect(function()
-    isFreecamMovementEnabled = not isFreecamMovementEnabled
-    movementButton.Text = isFreecamMovementEnabled and "Control Player " or "Control Freecam"
-    if player.Character then
-        local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            rootPart.Anchored = false
-        end
-    end
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
-        if isFreecamEnabled then
-            isAltHeld = true
-            if player.Character then
-                local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-                if rootPart then
-                    rootPart.Anchored = false
-                end
-            end
-        end
-    elseif input.KeyCode == Enum.KeyCode.P and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
-        if isFreecamEnabled then
-            deactivateFreecam()
-        else
-            activateFreecam()
-        end
-    end
-end)
-UserInputService.InputEnded:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
-        if isFreecamEnabled then
-            isAltHeld = false
-            if player.Character then
-                local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-                if rootPart then
-                    rootPart.Anchored = false
-                end
-            end
-        end
-    end
-end)
-
-RunService.Heartbeat:Connect(updateCamera)
-if characterAddedConnection then characterAddedConnection:Disconnect() end
-characterAddedConnection = player.CharacterAdded:Connect(function()
-    reloadFreecam()
-end)
-local currentSettings = {
-    Speed = "1500",
-    JumpCap = "1",
-    AirStrafeAcceleration = "187"
-}
-local emoteList = {}
-
-local success, emotesFolder = pcall(function()
-    return game:GetService("ReplicatedStorage").Items.Emotes
-end)
-
-if success and typeof(emotesFolder) == "Instance" then
-    for _, emote in ipairs(emotesFolder:GetChildren()) do
-        if emote:IsA("ModuleScript") or emote:IsA("LocalScript") or emote:IsA("Script") then
-            table.insert(emoteList, emote.Name)
-        end
-    end
-end
-
-getgenv().SelectedEmote = nil
-getgenv().EmoteEnabled = false
-local appliedOnce = false
-local playerModelPresent = false
-local gameStatsPath = workspace:WaitForChild("Game"):WaitForChild("Stats")
-getgenv().ApplyMode = "Not Optimized"
-local requiredFields = {
-    Friction = true,
-    AirStrafeAcceleration = true,
-    JumpHeight = true,
-    RunDeaccel = true,
-    JumpSpeedMultiplier = true,
-    JumpCap = true,
-    SprintCap = true,
-    WalkSpeedMultiplier = true,
-    BhopEnabled = true,
-    Speed = true,
-    AirAcceleration = true,
-    RunAccel = true,
-    SprintAcceleration = true
-}
-
-local function hasAllFields(tbl)
-    if type(tbl) ~= "table" then return false end
-    for field, _ in pairs(requiredFields) do
-        if rawget(tbl, field) == nil then return false end
-    end
-    return true
-end
-
-local function getConfigTables()
-    local tables = {}
-    for _, obj in ipairs(getgc(true)) do
-        local success, result = pcall(function()
-            if hasAllFields(obj) then return obj end
-        end)
-        if success and result then
-            table.insert(tables, result)
-        end
-    end
-    return tables
-end
-
-local function applyToTables(callback)
-    local targets = getConfigTables()
-    if #targets == 0 then return end
-    
-    if getgenv().ApplyMode == "Optimized" then
-        task.spawn(function()
-            for i, tableObj in ipairs(targets) do
-                if tableObj and typeof(tableObj) == "table" then
-                    pcall(callback, tableObj)
-                end
-                
-                if i % 3 == 0 then
-                    task.wait()
-                end
-            end
-        end)
-    else
-        for i, tableObj in ipairs(targets) do
-            if tableObj and typeof(tableObj) == "table" then
-                pcall(callback, tableObj)
-            end
-        end
-    end
-end
-
-local function applyStoredSettings()
-    local settings = {
-        {field = "Speed", value = tonumber(currentSettings.Speed)},
-        {field = "JumpCap", value = tonumber(currentSettings.JumpCap)},
-        {field = "AirStrafeAcceleration", value = tonumber(currentSettings.AirStrafeAcceleration)}
-    }
-    
-    for _, setting in ipairs(settings) do
-        if setting.value and tostring(setting.value) ~= "1500" and tostring(setting.value) ~= "1" and tostring(setting.value) ~= "187" then
-            applyToTables(function(obj)
-                obj[setting.field] = setting.value
-            end)
-        end
-    end
-end
-
-local function applySettingsWithDelay()
-    if not playerModelPresent or appliedOnce then
-        return
-    end
-    
-    appliedOnce = true
-    
-    local settings = {
-        {field = "Speed", value = tonumber(currentSettings.Speed), delay = math.random(1, 14)},
-        {field = "JumpCap", value = tonumber(currentSettings.JumpCap), delay = math.random(1, 14)},
-        {field = "AirStrafeAcceleration", value = tonumber(currentSettings.AirStrafeAcceleration), delay = math.random(1, 14)}
-    }
-    
-    for _, setting in ipairs(settings) do
-        if setting.value and tostring(setting.value) ~= "1500" and tostring(setting.value) ~= "1" and tostring(setting.value) ~= "187" then
-            task.spawn(function()
-                task.wait(setting.delay)
-                applyToTables(function(obj)
-                    obj[setting.field] = setting.value
-                end)
-            end)
-        end
-    end
-end
-
-local function isPlayerModelPresent()
-    local GameFolder = workspace:FindFirstChild("Game")
-    local PlayersFolder = GameFolder and GameFolder:FindFirstChild("Players")
-    return PlayersFolder and PlayersFolder:FindFirstChild(player.Name) ~= nil
-end
-local featureStates = {
-    AutoWhistle = false,
-    CustomGravity = false,
-    GravityValue = originalGameGravity,
-    InfiniteJump = false,
-    Fly = false,
-    TPWALK = false,
-    JumpBoost = false,
-    AntiAFK = false,
-    AutoCarry = false,
-    FullBright = false,
-    NoFog = false,
-    AutoVote = false,
-    AutoSelfRevive = false,
-    AutoWin = false,
-    AutoMoneyFarm = false,
-    AutoRevive = false,
-    FastRevive = false,
-    DisableCameraShake = false,
-    PlayerESP = {
-        boxes = false,
-        tracers = false,
-        names = false,
-        distance = false,
-        rainbowBoxes = false,
-        rainbowTracers = false,
-        boxType = "2D",
-    },
-    NextbotESP = {
-        boxes = false,
-        tracers = false,
-        names = false,
-        distance = false,
-        rainbowBoxes = false,
-        rainbowTracers = false,
-        boxType = "2D",
-    },
-    DownedBoxESP = false,
-    DownedTracer = false,
-    DownedNameESP = false,
-    DownedDistanceESP = false,
-    DownedBoxType = "2D",
-    FlySpeed = 5,
-    TpwalkValue = 1,
-    JumpPower = 5,
-    JumpMethod = "Hold",
-    SelectedMap = 1,
-    ZoomValue = 1,
-    TimerDisplay = false
-}
--- Variables
-local character, humanoid, rootPart
-local isJumpHeld = false
-local hasRevived = false
-local flying = false
-local bodyVelocity, bodyGyro
-local ToggleTpwalk = false
-local TpwalkConnection
-getgenv().ticketfarm = false
-getgenv().moneyfarm = false
-local jumpCount = 0
-local MAX_JUMPS = math.huge
-
-local AntiAFKConnection
-
-local AutoCarryConnection
-
-local reviveRange = 10
-local loopDelay = 0.15
-local reviveLoopHandle = nil
-local interactEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("Character"):WaitForChild("Interact")
-local featureStates = featureStates or {}
-featureStates.FastReviveMethod = "Interact"
-featureStates.reviveHook = nil
-featureStates.interactHookActive = false
-local playerEspElements = {}
-local playerEspConnection = nil
-local nextbotESPThread = nil
-local downedTracerConnection
-local downedNameESPConnection
-local downedTracerLines = {}
-local downedNameESPLabels = {}
-local function draw3DBox(esp, hrp, camera, boxColor, boxSize)
-    if not hrp or not camera then
-        warn("draw3DBox: Missing hrp or camera")
-        return
-    end
-
-    boxSize = boxSize or Vector3.new(4, 5, 3)
-    local size = boxSize
-    local offsets = {
-        Vector3.new( size.X/2,  size.Y/2,  size.Z/2),
-        Vector3.new( size.X/2,  size.Y/2, -size.Z/2),
-        Vector3.new( size.X/2, -size.Y/2,  size.Z/2),
-        Vector3.new( size.X/2, -size.Y/2, -size.Z/2),
-        Vector3.new(-size.X/2,  size.Y/2,  size.Z/2),
-        Vector3.new(-size.X/2,  size.Y/2, -size.Z/2),
-        Vector3.new(-size.X/2, -size.Y/2,  size.Z/2),
-        Vector3.new(-size.X/2, -size.Y/2, -size.Z/2),
-    }
-    local screenPoints = {}
-    local anyPointOnScreen = false
-
-    for i, offset in ipairs(offsets) do
-        local success, vec, onScreen = pcall(function()
-            local worldPos = hrp.CFrame * CFrame.Angles(0, math.rad(90), 0) * offset
-            return camera:WorldToViewportPoint(worldPos)
-        end)
-        if not success then
-            warn("draw3DBox: WorldToViewportPoint failed for offset " .. i)
-            return
-        end
-        screenPoints[i] = {pos = Vector2.new(vec.X, vec.Y), depth = vec.Z, onScreen = onScreen}
-        if onScreen and vec.Z > 0 then
-            anyPointOnScreen = true
-        end
-    end
-
-    if not esp.boxLines or #esp.boxLines == 0 then
-        esp.boxLines = {}
-        for i = 1, 12 do
-            local success, line = pcall(function()
-                local newLine = Drawing.new("Line")
-                newLine.Thickness = 1
-                newLine.ZIndex = 2
-                return newLine
-            end)
-            if success then
-                table.insert(esp.boxLines, line)
-            else
-                warn("draw3DBox: Failed to create Drawing.Line for index " .. i)
-            end
-        end
-    end
-
-    local edges = {
-        {1, 2}, {1, 3}, {1, 5},
-        {2, 4}, {2, 6},
-        {3, 4}, {3, 7},
-        {5, 6}, {5, 7},
-        {4, 8}, {6, 8}, {7, 8} 
-    }
-
-    local distance = (player.Character and player.Character:FindFirstChild("HumanoidRootPart") and 
-        (player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude) or 10
-    local thickness = math.clamp(3 / (distance / 50), 1, 3)
-
-    local lineIndex = 1
-    for _, edge in ipairs(edges) do
-        if lineIndex > #esp.boxLines then
-            warn("draw3DBox: Not enough lines for edge " .. lineIndex)
-            break
-        end
-        local p1 = screenPoints[edge[1]]
-        local p2 = screenPoints[edge[2]]
-        local line = esp.boxLines[lineIndex]
-        if not line then
-            warn("draw3DBox: Line not found at index " .. lineIndex)
-            break
-        end
-        line.Color = boxColor or Color3.fromRGB(255, 255, 255)
-        line.Thickness = thickness
-        line.Transparency = 1
-        if anyPointOnScreen and p1.depth > 0 and p2.depth > 0 then
-            line.From = p1.pos
-            line.To = p2.pos
-            line.Visible = true
-        else
-            line.Visible = false
-        end
-        lineIndex = lineIndex + 1
-    end
-
-    for i = lineIndex, #esp.boxLines do
-        esp.boxLines[i].Visible = false
-    end
-end
-
-local function updatePlayerESP()
-    if not camera then camera = workspace.CurrentCamera end
-    if not camera then
-        warn("updatePlayerESP: Camera not found")
-        return
-    end
-    local screenBottomCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
-    local currentTargets = {}
-
-    if workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players") then
-        for _, model in pairs(workspace.Game.Players:GetChildren()) do
-            if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") then
-                local isPlayer = Players:GetPlayerFromCharacter(model) ~= nil
-                local humanoid = model:FindFirstChild("Humanoid")
-                if isPlayer and model.Name ~= player.Name and humanoid and humanoid.Health > 0 then
-                    currentTargets[model] = true
-                    if not playerEspElements[model] then
-                        playerEspElements[model] = {
-                            box = Drawing.new("Square"),
-                            tracer = Drawing.new("Line"),
-                            name = Drawing.new("Text"),
-                            distance = Drawing.new("Text"),
-                            boxLines = {}
-                        }
-                        playerEspElements[model].box.Thickness = 2
-                        playerEspElements[model].box.Filled = false
-                        playerEspElements[model].tracer.Thickness = 1
-                        playerEspElements[model].name.Size = 14
-                        playerEspElements[model].name.Center = true
-                        playerEspElements[model].name.Outline = true
-                        playerEspElements[model].distance.Size = 14
-                        playerEspElements[model].distance.Center = true
-                        playerEspElements[model].distance.Outline = true
-                    end
-
-                    local esp = playerEspElements[model]
-                    local hrp = model.HumanoidRootPart
-                    local vector, onScreen = camera:WorldToViewportPoint(hrp.Position)
-
-                    if onScreen then
-                        local topY = camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0)).Y
-                        local bottomY = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)).Y
-                        local size = (bottomY - topY) / 2
-                        local toggles = featureStates.PlayerESP
-
-                        local boxSize = Vector3.new(4, 5, 3)
-                        if humanoid then
-                            boxSize = Vector3.new(2, humanoid.HipHeight + 5, 2)
-                        end
-
-                        if toggles.boxes then
-                            local boxColor
-                            if toggles.rainbowBoxes then
-                                local hue = (tick() % 5) / 5
-                                boxColor = Color3.fromHSV(hue, 1, 1)
-                            else
-                                boxColor = Color3.fromRGB(0, 255, 0)
-                            end
-                            if toggles.boxType == "2D" then
-                                esp.box.Visible = true
-                                esp.box.Size = Vector2.new(size * 2, size * 3)
-                                esp.box.Position = Vector2.new(vector.X - size, vector.Y - size * 1.5)
-                                esp.box.Color = boxColor
-                                if esp.boxLines then
-                                    for _, line in ipairs(esp.boxLines) do
-                                        line.Visible = false
-                                    end
-                                end
-                            else
-                                esp.box.Visible = false
-                                pcall(function()
-                                    draw3DBox(esp, hrp, camera, boxColor, boxSize)
-                                end)
-                            end
-                        else
-                            esp.box.Visible = false
-                            if esp.boxLines then
-                                for _, line in ipairs(esp.boxLines) do
-                                    line.Visible = false
-                                end
-                            end
-                        end
-
-                        if toggles.tracers then
-                            esp.tracer.Visible = true
-                            esp.tracer.From = screenBottomCenter
-                            esp.tracer.To = Vector2.new(vector.X, vector.Y)
-                            if toggles.rainbowTracers then
-                                local hue = (tick() % 5) / 5
-                                esp.tracer.Color = Color3.fromHSV(hue, 1, 1)
-                            else
-                                esp.tracer.Color = Color3.fromRGB(0, 255, 0)
-                            end
-                        else
-                            esp.tracer.Visible = false
-                        end
-
-                        if toggles.names then
-                            esp.name.Visible = true
-                            esp.name.Text = model.Name
-                            esp.name.Position = Vector2.new(vector.X, vector.Y - size * 1.5 - 20)
-                            esp.name.Color = Color3.fromRGB(255, 255, 255)
-                        else
-                            esp.name.Visible = false
-                        end
-
-                        if toggles.distance then
-                            local distance = (Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and (Players.LocalPlayer.Character.HumanoidRootPart.Position - hrp.Position).Magnitude) or 0
-                            esp.distance.Visible = true
-                            esp.distance.Text = string.format("%.1f", distance)
-                            esp.distance.Position = Vector2.new(vector.X, vector.Y + size * 1.5 + 5)
-                            esp.distance.Color = Color3.fromRGB(255, 255, 255)
-                        else
-                            esp.distance.Visible = false
-                        end
-                    else
-                        esp.box.Visible = false
-                        esp.tracer.Visible = false
-                        esp.name.Visible = false
-                        esp.distance.Visible = false
-                        if esp.boxLines then
-                            for _, line in ipairs(esp.boxLines) do
-                                line.Visible = false
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    for target, esp in pairs(playerEspElements) do
-        if not currentTargets[target] then
-            for _, drawing in pairs(esp) do
-                if type(drawing) == "table" then
-                    for _, line in ipairs(drawing) do
-                        pcall(function() line:Remove() end)
-                    end
-                else
-                    pcall(function() drawing:Remove() end)
-                end
-            end
-            playerEspElements[target] = nil
-        end
-    end
-end
-
-local function updateNextbotESP()
-    local camera = workspace.CurrentCamera
-    if not camera then
-        warn("updateNextbotESP: Camera not found")
-        return
-    end
-    local screenBottomCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
-    local currentTargets = {}
-
-    local function processModel(model)
-        if not model or not model:IsA("Model") or not model:FindFirstChild("HumanoidRootPart") then return end
-        if not isNextbotModel(model) then return end
-        currentTargets[model] = true
-
-        if not nextbotEspElements[model] then
-            nextbotEspElements[model] = {
-                box = Drawing.new("Square"),
-                tracer = Drawing.new("Line"),
-                name = Drawing.new("Text"),
-                distance = Drawing.new("Text"),
-                boxLines = {}
-            }
-            nextbotEspElements[model].box.Thickness = 2
-            nextbotEspElements[model].box.Filled = false
-            nextbotEspElements[model].tracer.Thickness = 1
-            nextbotEspElements[model].name.Size = 14
-            nextbotEspElements[model].name.Center = true
-            nextbotEspElements[model].name.Outline = true
-            nextbotEspElements[model].distance.Size = 14
-            nextbotEspElements[model].distance.Center = true
-            nextbotEspElements[model].distance.Outline = true
-        end
-
-        local esp = nextbotEspElements[model]
-        local hrp = model.HumanoidRootPart
-        local vector, onScreen = camera:WorldToViewportPoint(hrp.Position)
-
-        if onScreen then
-            local topY = camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0)).Y
-            local bottomY = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)).Y
-            local size = (bottomY - topY) / 2
-            local toggles = featureStates.NextbotESP
-
-            local boxSize = Vector3.new(4, 5, 3)
-            if model:FindFirstChild("Humanoid") then
-                local humanoid = model:FindFirstChild("Humanoid")
-                boxSize = Vector3.new(2, humanoid.HipHeight + 5, 2)
-            end
-
-            if toggles.boxes then
-                local boxColor
-                if toggles.rainbowBoxes then
-                    local hue = (tick() % 5) / 5
-                    boxColor = Color3.fromHSV(hue, 1, 1)
-                else
-                    boxColor = Color3.fromRGB(255, 0, 0)
-                end
-                if toggles.boxType == "2D" then
-                    esp.box.Visible = true
-                    esp.box.Size = Vector2.new(size * 2, size * 3)
-                    esp.box.Position = Vector2.new(vector.X - size, vector.Y - size * 1.5)
-                    esp.box.Color = boxColor
-                    if esp.boxLines then
-                        for _, line in ipairs(esp.boxLines) do
-                            line.Visible = false
-                        end
-                    end
-                else
-                    esp.box.Visible = false
-                    pcall(function()
-                        draw3DBox(esp, hrp, camera, boxColor, boxSize)
+WindUI.Window = Window
+WindUI.Tabs = Tabs
+WindUI:SetTheme("Dark")
+
+-- If UI_MODE wants a Fluent mirror, build it after original script populates WindUI.Options
+if UI_MODE ~= "shim" and Fluent then
+    task.spawn(function()
+        wait(0.8) -- allow original script to create WindUI options
+        local ok, err = pcall(function()
+            -- Build a Fluent mirror window
+            local mirror = Fluent:CreateWindow({
+                Title = "Zen Hub (Fluent Mirror)",
+                SubTitle = "Mirror of WindUI options",
+                Size = UDim2.fromOffset(700, 520),
+                Theme = "Dark"
+            })
+            local tab = mirror:AddTab({ Title = "Mirror", Icon = "eye" })
+            -- iterate options and create controls based on value type
+            for id, info in pairs(WindUI.Options) do
+                local meta = info._meta or {}
+                local v = info.Value
+                local display = meta.Title or id
+                if type(v) == "boolean" then
+                    tab:AddToggle(id, { Title = display, Description = meta.Description or meta.Desc or "" , Default = v }):OnChanged(function(val)
+                        WindUI.Options[id].Value = val
                     end)
-                end
-            else
-                esp.box.Visible = false
-                if esp.boxLines then
-                    for _, line in ipairs(esp.boxLines) do
-                        line.Visible = false
-                    end
-                end
-            end
-
-            if toggles.tracers then
-                esp.tracer.Visible = true
-                esp.tracer.From = screenBottomCenter
-                esp.tracer.To = Vector2.new(vector.X, vector.Y)
-                if toggles.rainbowTracers then
-                    local hue = (tick() % 5) / 5
-                    esp.tracer.Color = Color3.fromHSV(hue, 1, 1)
-                else
-                    esp.tracer.Color = Color3.fromRGB(255, 0, 0)
-                end
-            else
-                esp.tracer.Visible = false
-            end
-
-            if toggles.names then
-                esp.name.Visible = true
-                esp.name.Text = model.Name
-                esp.name.Position = Vector2.new(vector.X, vector.Y - size * 1.5 - 20)
-                esp.name.Color = Color3.fromRGB(255, 0, 0)
-            else
-                esp.name.Visible = false
-            end
-
-            if toggles.distance then
-                local distance = (player.Character and player.Character:FindFirstChild("HumanoidRootPart") and 
-                    (player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude) or 0
-                esp.distance.Visible = true
-                esp.distance.Text = string.format("%.1f", distance)
-                esp.distance.Position = Vector2.new(vector.X, vector.Y + size * 1.5 + 5)
-                esp.distance.Color = Color3.fromRGB(255, 0, 0)
-            else
-                esp.distance.Visible = false
-            end
-        else
-            esp.box.Visible = false
-            esp.tracer.Visible = false
-            esp.name.Visible = false
-            esp.distance.Visible = false
-            if esp.boxLines then
-                for _, line in ipairs(esp.boxLines) do
-                    line.Visible = false
-                end
-            end
-        end
-    end
-
-    if workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players") then
-        for _, model in pairs(workspace.Game.Players:GetChildren()) do
-            processModel(model)
-        end
-    end
-    if workspace:FindFirstChild("NPCs") then
-        for _, model in pairs(workspace.NPCs:GetChildren()) do
-            processModel(model)
-        end
-    end
-
-    for target, esp in pairs(nextbotEspElements) do
-        if not currentTargets[target] then
-            for _, drawing in pairs(esp) do
-                if type(drawing) == "table" then
-                    for _, line in ipairs(drawing) do
-                        pcall(function() line:Remove() end)
+                elseif type(v) == "number" then
+                    local minv = (meta.Min or 0)
+                    local maxv = (meta.Max or (v*2) or 100)
+                    tab:AddSlider(id, { Title = display, Description = meta.Description or "", Default = v, Min = minv, Max = maxv, Rounding = meta.Step or 1 })
+                elseif type(v) == "string" then
+                    -- if meta.Values present, create dropdown
+                    if meta.Values and type(meta.Values) == "table" and #meta.Values > 0 then
+                        tab:AddDropdown(id, { Title = display, Values = meta.Values, Default = 1 })
+                    else
+                        tab:AddInput(id, { Title = display, Default = v or "" })
                     end
                 else
-                    pcall(function() drawing:Remove() end)
+                    tab:AddLabel({ Title = display, Description = tostring(v) })
                 end
             end
-            nextbotEspElements[target] = nil
-        end
-    end
-end
-
-local function stopPlayerESP()
-    if playerEspConnection then
-        playerEspConnection:Disconnect()
-        playerEspConnection = nil
-    end
-    for _, esp in pairs(playerEspElements) do
-        for _, drawing in pairs(esp) do
-            pcall(function() drawing:Remove() end)
-        end
-        if esp.boxLines then
-            for _, line in ipairs(esp.boxLines) do
-                pcall(function() line:Remove() end)
-            end
-        end
-    end
-    playerEspElements = {}
-end
-
-local function startPlayerESP()
-    if playerEspConnection then return end
-    playerEspConnection = RunService.RenderStepped:Connect(updatePlayerESP)
-end
-
-local nextBotNames = {}
-if ReplicatedStorage:FindFirstChild("NPCs") then
-    for _, npc in ipairs(ReplicatedStorage.NPCs:GetChildren()) do
-        table.insert(nextBotNames, npc.Name)
-    end
-end
-
-local function isNextbotModel(model)
-    if not model or not model.Name then return false end
-    for _, name in ipairs(nextBotNames) do
-        if model.Name == name then return true end
-    end
-    return false
-end
-
-local nextbotEspElements = {}
-local nextbotEspConnection = nil
-local function updateNextbotESP()
-    local camera = workspace.CurrentCamera
-    if not camera then return end
-    local screenBottomCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
-    local currentTargets = {}
-
-    local function processModel(model)
-        if not model or not model:IsA("Model") or not model:FindFirstChild("HumanoidRootPart") then return end
-        if not isNextbotModel(model) then return end
-        currentTargets[model] = true
-
-        if not nextbotEspElements[model] then
-            nextbotEspElements[model] = {
-                box = Drawing.new("Square"),
-                tracer = Drawing.new("Line"),
-                name = Drawing.new("Text"),
-                distance = Drawing.new("Text"),
-                boxLines = {}
-            }
-            nextbotEspElements[model].box.Thickness = 2
-            nextbotEspElements[model].box.Filled = false
-            nextbotEspElements[model].tracer.Thickness = 1
-            nextbotEspElements[model].name.Size = 14
-            nextbotEspElements[model].name.Center = true
-            nextbotEspElements[model].name.Outline = true
-            nextbotEspElements[model].distance.Size = 14
-            nextbotEspElements[model].distance.Center = true
-            nextbotEspElements[model].distance.Outline = true
-        end
-
-        local esp = nextbotEspElements[model]
-        local hrp = model.HumanoidRootPart
-        local vector, onScreen = camera:WorldToViewportPoint(hrp.Position)
-
-        if onScreen then
-            local topY = camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0)).Y
-            local bottomY = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)).Y
-            local size = (bottomY - topY) / 2
-            local toggles = featureStates.NextbotESP
-            if toggles.boxes then
-                local boxColor
-                if toggles.rainbowBoxes then
-                    local hue = (tick() % 5) / 5
-                    boxColor = Color3.fromHSV(hue, 1, 1)
-                else
-                    boxColor = Color3.fromRGB(255, 0, 0)
-                end
-                if toggles.boxType == "2D" then
-                    esp.box.Visible = true
-                    esp.box.Size = Vector2.new(size * 2, size * 3)
-                    esp.box.Position = Vector2.new(vector.X - size, vector.Y - size * 1.5)
-                    esp.box.Color = boxColor
-                    if esp.boxLines then
-                        for _, line in ipairs(esp.boxLines) do
-                            line.Visible = false
-                        end
-                    end
-                else
-                    esp.box.Visible = false
-                    draw3DBox(esp, hrp, camera, boxColor)
-                end
-            else
-                esp.box.Visible = false
-                if esp.boxLines then
-                    for _, line in ipairs(esp.boxLines) do
-                        line.Visible = false
-                    end
-                end
-            end
-
-            if toggles.tracers then
-                esp.tracer.Visible = true
-                esp.tracer.From = screenBottomCenter
-                esp.tracer.To = Vector2.new(vector.X, vector.Y)
-                if toggles.rainbowTracers then
-                    local hue = (tick() % 5) / 5
-                    esp.tracer.Color = Color3.fromHSV(hue, 1, 1)
-                else
-                    esp.tracer.Color = Color3.fromRGB(255, 0, 0)
-                end
-            else
-                esp.tracer.Visible = false
-            end
-            if toggles.names then
-                esp.name.Visible = true
-                esp.name.Text = model.Name
-                esp.name.Position = Vector2.new(vector.X, vector.Y - size * 1.5 - 20)
-                esp.name.Color = Color3.fromRGB(255, 0, 0)
-            else
-                esp.name.Visible = false
-            end
-            if toggles.distance then
-                local distance = (player.Character and player.Character:FindFirstChild("HumanoidRootPart") and 
-                    (player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude) or 0
-                esp.distance.Visible = true
-                esp.distance.Text = string.format("%.1f", distance)
-                esp.distance.Position = Vector2.new(vector.X, vector.Y + size * 1.5 + 5)
-                esp.distance.Color = Color3.fromRGB(255, 0, 0)
-            else
-                esp.distance.Visible = false
-            end
-        else
-            esp.box.Visible = false
-            esp.tracer.Visible = false
-            esp.name.Visible = false
-            esp.distance.Visible = false
-            if esp.boxLines then
-                for _, line in ipairs(esp.boxLines) do
-                    line.Visible = false
-                end
-            end
-        end
-    end
-
-    if workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players") then
-        for _, model in pairs(workspace.Game.Players:GetChildren()) do
-            processModel(model)
-        end
-    end
-    if workspace:FindFirstChild("NPCs") then
-        for _, model in pairs(workspace.NPCs:GetChildren()) do
-            processModel(model)
-        end
-    end
-    for target, esp in pairs(nextbotEspElements) do
-        if not currentTargets[target] then
-            for _, drawing in pairs(esp) do
-                if type(drawing) == "table" then
-                    for _, line in ipairs(drawing) do
-                        pcall(function() line:Remove() end)
-                    end
-                else
-                    pcall(function() drawing:Remove() end)
-                end
-            end
-            nextbotEspElements[target] = nil
-        end
-    end
-end
-
-local function startNextbotNameESP()
-    if nextbotEspConnection then 
-        nextbotEspConnection:Disconnect()
-        nextbotEspConnection = nil
-    end
-    nextbotEspConnection = RunService.RenderStepped:Connect(updateNextbotESP)
-    updateNextbotESP()
-end
-
-local function startNextbotESP()
-    if nextbotEspConnection then return end
-    nextbotEspConnection = RunService.RenderStepped:Connect(updateNextbotESP)
-end
-
-local function stopNextbotESP()
-    if nextbotEspConnection then
-        nextbotEspConnection:Disconnect()
-        nextbotEspConnection = nil
-    end
-    for _, esp in pairs(nextbotEspElements) do
-        for _, drawing in pairs(esp) do
-            pcall(function() drawing:Remove() end)
-        end
-        if esp.boxLines then
-            for _, line in ipairs(esp.boxLines) do
-                pcall(function() line:Remove() end)
-            end
-        end
-    end
-    nextbotEspElements = {}
-end
-local function setupNextbotDetection()
-    if workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players") then
-        workspace.Game.Players.ChildAdded:Connect(function(child)
-            if child:IsA("Model") and isNextbotModel(child) and featureStates.NextbotESP.names or featureStates.NextbotESP.boxes or featureStates.NextbotESP.tracers or featureStates.NextbotESP.distance then
-                task.wait(0.5)
-                updateNextbotESP()
-            end
+            mirror:SelectTab(1)
         end)
-    end
-    if workspace:FindFirstChild("NPCs") then
-        workspace.NPCs.ChildAdded:Connect(function(child)
-            if child:IsA("Model") and isNextbotModel(child) and featureStates.NextbotESP.names or featureStates.NextbotESP.boxes or featureStates.NextbotESP.tracers or featureStates.NextbotESP.distance then
-                task.wait(0.5)
-                updateNextbotESP()
-            end
-        end)
-    end
-end
-local function toggleNextbotNameESP()
-    if featureStates.NextbotESP.names or featureStates.NextbotESP.boxes or featureStates.NextbotESP.tracers or featureStates.NextbotESP.distance then
-        startNextbotNameESP()
-        setupNextbotDetection()
-    else
-        stopNextbotNameESP()
-    end
-end
-local function toggleNextbotNameESP()
-    if espEnabled then
-        stopNextbotNameESP()
-        espEnabled = false
-    else
-        startNextbotNameESP()
-        setupNextbotDetection()
-        espEnabled = true
-    end
-end
-
-game:GetService("Players").PlayerRemoving:Connect(function(leavingPlayer)
-    if leavingPlayer == player then
-        stopNextbotNameESP()
-    end
-end)
-local function cleanupTracers(tracerTable)
-    for _, drawing in ipairs(tracerTable) do
-        if drawing and drawing.Remove then 
-            pcall(function() drawing:Remove() end)
-        elseif drawing then 
-            drawing.Visible = false 
-        end
-    end
-    tracerTable = {}
-end
-
-local function startDownedTracer()
-    downedTracerConnection = RunService.Heartbeat:Connect(function()
-        cleanupTracers(downedTracerLines)
-        downedTracerLines = {}
-        local folder = workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players")
-        if folder then
-            for _, char in ipairs(folder:GetChildren()) do
-                if char:IsA("Model") then
-                    local team = char:GetAttribute("Team")
-                    local downed = char:GetAttribute("Downed")
-                    if team ~= "Nextbot" and char.Name ~= player.Name and downed == true then
-                        local hrp = char:FindFirstChild("HumanoidRootPart")
-                        if hrp and workspace.CurrentCamera then
-                            local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(hrp.Position)
-                            if onScreen then
-                                if featureStates.DownedTracer then
-                                    local tracer = Drawing.new("Line")
-                                    tracer.Color = Color3.fromRGB(255, 165, 0)
-                                    tracer.Thickness = 2
-                                    tracer.From = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y)
-                                    tracer.To = Vector2.new(pos.X, pos.Y)
-                                    tracer.ZIndex = 1
-                                    tracer.Visible = true
-                                    table.insert(downedTracerLines, tracer)
-                                end
-                                if featureStates.DownedBoxESP then
-                                    local boxColor = Color3.fromRGB(255, 255, 0)
-                                    if featureStates.DownedBoxType == "2D" then
-                                        local topY = workspace.CurrentCamera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0)).Y
-                                        local bottomY = workspace.CurrentCamera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)).Y
-                                        local size = (bottomY - topY) / 2
-                                        local box = Drawing.new("Square")
-                                        box.Thickness = 2
-                                        box.Filled = false
-                                        box.Color = boxColor
-                                        box.Size = Vector2.new(size * 2, size * 3)
-                                        box.Position = Vector2.new(pos.X - size, pos.Y - size * 1.5)
-                                        box.ZIndex = 1
-                                        box.Visible = true
-                                        table.insert(downedTracerLines, box)
-                                    else
-                                        local size = Vector3.new(3, 5, 2)
-                                        local offsets = {
-                                            Vector3.new( size.X/2,  size.Y/2,  size.Z/2),
-                                            Vector3.new( size.X/2,  size.Y/2, -size.Z/2),
-                                            Vector3.new( size.X/2, -size.Y/2,  size.Z/2),
-                                            Vector3.new( size.X/2, -size.Y/2, -size.Z/2),
-                                            Vector3.new(-size.X/2,  size.Y/2,  size.Z/2),
-                                            Vector3.new(-size.X/2,  size.Y/2, -size.Z/2),
-                                            Vector3.new(-size.X/2, -size.Y/2,  size.Z/2),
-                                            Vector3.new(-size.X/2, -size.Y/2, -size.Z/2),
-                                        }
-                                        local screenPoints = {}
-                                        for i, offset in ipairs(offsets) do
-                                            local worldPos = hrp.CFrame * offset
-                                            local vec, _ = workspace.CurrentCamera:WorldToViewportPoint(worldPos)
-                                            screenPoints[i] = {pos = Vector2.new(vec.X, vec.Y), depth = vec.Z}
-                                        end
-                                        local edges = {
-                                            {1,2}, {1,3}, {1,5},
-                                            {2,4}, {2,6},
-                                            {3,4}, {3,7},
-                                            {5,6}, {5,7},
-                                            {4,8}, {6,8}, {7,8}
-                                        }
-                                        for _, edge in ipairs(edges) do
-                                            local p1 = screenPoints[edge[1]]
-                                            p2 = screenPoints[edge[2]]
-                                            if p1.depth > 0 and p2.depth > 0 then
-                                                local line = Drawing.new("Line")
-                                                line.Thickness = 2
-                                                line.Color = boxColor
-                                                line.From = p1.pos
-                                                line.To = p2.pos
-                                                line.Visible = true
-                                                table.insert(downedTracerLines, line)
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
+        if not ok then
+            warn("Zen Hub: fluent mirror build failed:", err)
         end
     end)
 end
 
-local function stopDownedTracer()
-    if downedTracerConnection then
-        downedTracerConnection:Disconnect()
-        downedTracerConnection = nil
-    end
-    cleanupTracers(downedTracerLines)
-    downedTracerLines = {}
-end
 
-local function cleanupNameESPLabels(labelTable)
-    for _, label in ipairs(labelTable) do
-        if label and label.Remove then 
-            label:Remove()
-        elseif label then 
-            label.Visible = false 
-        end
-    end
-    labelTable = {}
-end
+local FeatureSection = Window:Section({ Title = "loc:FEATURES", Opened = true })
 
-local function startDownedNameESP()
-    downedNameESPConnection = RunService.Heartbeat:Connect(function()
-        cleanupNameESPLabels(downedNameESPLabels)
-        downedNameESPLabels = {}
-        local folder = workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players")
-        if folder then
-            for _, char in ipairs(folder:GetChildren()) do
-                if char:IsA("Model") then
-                    local team = char:GetAttribute("Team")
-                    local downed = char:GetAttribute("Downed")
-                    if team ~= "Nextbot" and char.Name ~= player.Name and downed == true then
-                        local hrp = char:FindFirstChild("HumanoidRootPart")
-                        if hrp and workspace.CurrentCamera then
-                            local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(hrp.Position)
-                            if onScreen then
-                                local distance = getDistanceFromPlayer(hrp.Position)
-                                local displayText = char.Name
-                                if featureStates.DownedDistanceESP then
-                                    displayText = displayText .. "\n" .. math.floor(distance) .. " studs"
-                                end
-                                local label = Drawing.new("Text")
-                                label.Text = displayText
-                                label.Size = 16
-                                label.Center = true
-                                label.Outline = true
-                                label.OutlineColor = Color3.new(0, 0, 0)
-                                label.Color = Color3.fromRGB(255, 165, 0)
-                                label.Position = Vector2.new(pos.X, pos.Y - 50)
-                                label.Visible = true
-                                table.insert(downedNameESPLabels, label)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end)
-end
-
-local function stopDownedNameESP()
-    if downedNameESPConnection then
-        downedNameESPConnection:Disconnect()
-        downedNameESPConnection = nil
-    end
-    cleanupNameESPLabels(downedNameESPLabels)
-    downedNameESPLabels = {}
-end
--- Visual Variables
-local originalBrightness = Lighting.Brightness
-local originalFogEnd = Lighting.FogEnd
-local originalOutdoorAmbient = Lighting.OutdoorAmbient
-local originalAmbient = Lighting.Ambient
-local originalGlobalShadows = Lighting.GlobalShadows
-local originalAtmospheres = {}
-
-for _, v in pairs(Lighting:GetDescendants()) do
-    if v:IsA("Atmosphere") then
-        table.insert(originalAtmospheres, v)
-    end
-end
-local function startNoFog()
-    originalFogEnd = Lighting.FogEnd
-    Lighting.FogEnd = 1000000
-    for _, v in pairs(Lighting:GetDescendants()) do
-        if v:IsA("Atmosphere") then
-            v:Destroy()
-        end
-    end
-end
-local function isPlayerGrounded()
-    if not character or not humanoid or not rootPart then
-        return false
-    end
-    local rayOrigin = rootPart.Position
-    local rayDirection = Vector3.new(0, -3, 0)
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {character}
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-    return raycastResult ~= nil
-end
-
-local function bouncePlayer()
-    if character and humanoid and rootPart and humanoid.Health > 0 then
-        if not isPlayerGrounded() then
-            humanoid.Jump = true
-            local jumpVelocity = math.sqrt(1.5 * humanoid.JumpHeight * workspace.Gravity) * 1.5
-            rootPart.Velocity = Vector3.new(rootPart.Velocity.X, jumpVelocity * humanoid.JumpPower / 50, rootPart.Velocity.Z)
-        end
-    end
-end
-
-local function getDistanceFromPlayer(targetPosition)
-    if not character or not rootPart then return 0 end
-    return (targetPosition - rootPart.Position).Magnitude
-end
-
-local function isPlayerDowned(pl)
-    if not pl or not pl.Character then return false end
-    local char = pl.Character
-    local humanoid = char:FindFirstChild("Humanoid")
-    if humanoid and humanoid.Health <= 0 then
-        return true
-    end
-    if char.GetAttribute and char:GetAttribute("Downed") == true then
-        return true
-    end
-    return false
-end
-local function isPlayerDowned(pl)
-    local char = pl.Character
-    if char and char:FindFirstChild("Humanoid") then
-        local humanoid = char.Humanoid
-        return humanoid.Health <= 0 or char:GetAttribute("Downed") == true
-    end
-    return false
-end
-
-local function startAutoRevive()
-    if featureStates.FastReviveMethod == "Auto" then
-        if reviveLoopHandle then return end
-        
-        reviveLoopHandle = task.spawn(function()
-            while featureStates.FastRevive do
-                local LocalPlayer = Players.LocalPlayer
-                if LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    local myHRP = LocalPlayer.Character.HumanoidRootPart
-                    for _, pl in ipairs(Players:GetPlayers()) do
-                        if pl ~= LocalPlayer then
-                            local char = pl.Character
-                            if char and char:FindFirstChild("HumanoidRootPart") then
-                                if isPlayerDowned(pl) then
-                                    local hrp = char.HumanoidRootPart
-                                    local success, dist = pcall(function()
-                                        return (myHRP.Position - hrp.Position).Magnitude
-                                    end)
-                                    if success and dist and dist <= reviveRange then
-                                        pcall(function()
-                                            interactEvent:FireServer("Revive", true, pl.Name)
-                                        end)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                task.wait(loopDelay)
-            end
-            reviveLoopHandle = nil
-        end)
-    elseif featureStates.FastReviveMethod == "Interact" then
-        if not featureStates.interactHookActive then
-            local localPlayer = Players.LocalPlayer
-            local eventsFolder = localPlayer.PlayerScripts:WaitForChild("Events")
-            local tempEventsFolder = eventsFolder:WaitForChild("temporary_events")
-            local useKeybind = tempEventsFolder:WaitForChild("UseKeybind")
-            
-            local connection = useKeybind.Event:Connect(function(...)
-                local args = {...}
-                
-                if args[1] and type(args[1]) == "table" then
-                    local keyData = args[1]
-                    
-                    if keyData.Key == "Interact" and keyData.Down == true and featureStates.FastRevive then
-                        local function reviveAllPlayers()
-                            local ohString1 = "Revive"
-                            local ohBoolean2 = true
-                            
-                            for _, player in pairs(Players:GetPlayers()) do
-                                if player ~= localPlayer then
-                                        local ohString3 = player.Name
-                                        pcall(function()
-                                            interactEvent:FireServer(ohString1, ohBoolean2, ohString3)
-                                        end)
-                                        task.wait(0.1)
-                                end
-                            end
-                        end
-                        
-                        task.spawn(reviveAllPlayers)
-                    end
-                end
-            end)
-            
-            featureStates.interactConnection = connection
-            featureStates.interactHookActive = true
-        end
-    end
-end
-
-local function stopAutoRevive()
-    if reviveLoopHandle then
-        task.cancel(reviveLoopHandle)
-        reviveLoopHandle = nil
-    end
+    local Tabs = {
+    Main = FeatureSection:Tab({ Title = "Main", Icon = "layout-grid" }),
+    Player = FeatureSection:Tab({ Title = "loc:Player_TAB", Icon = "user" }),
+    Auto = FeatureSection:Tab({ Title = "loc:AUTO_TAB", Icon = "repeat-2" }),
+    Visuals = FeatureSection:Tab({ Title = "loc:VISUALS_TAB", Icon = "camera" }),
+    ESP = FeatureSection:Tab({ Title = "loc:ESP_TAB", Icon = "eye" }),
+    Utility = FeatureSection:Tab({ Title = "Utility", Icon = "wrench"}),
+    Teleport = FeatureSection:Tab({ Title = "Teleport", Icon = "navigation" }),
+    Settings = FeatureSection:Tab({ Title = "loc:SETTINGS_TAB", Icon = "settings" })
     
-    if featureStates.interactHookActive then
-        if featureStates.interactConnection then
-            featureStates.interactConnection:Disconnect()
-            featureStates.interactConnection = nil
-        end
-        featureStates.interactHookActive = false
-    end
-end
-
-local function startFlying()
-    if not character or not humanoid or not rootPart then return end
-    flying = true
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    bodyVelocity.Parent = rootPart
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    bodyGyro.CFrame = rootPart.CFrame
-    bodyGyro.Parent = rootPart
-    humanoid.PlatformStand = true
-end
-
-local function stopFlying()
-    flying = false
-    if bodyVelocity then
-        bodyVelocity:Destroy()
-        bodyVelocity = nil
-    end
-    if bodyGyro then
-        bodyGyro:Destroy()
-        bodyGyro = nil
-    end
-    if humanoid then
-        humanoid.PlatformStand = false
-    end
-end
-
-local function updateFly()
-    if not flying or not bodyVelocity or not bodyGyro then return end
-    local camera = workspace.CurrentCamera
-    local cameraCFrame = camera.CFrame
-    local direction = Vector3.new(0, 0, 0)
-    local moveDirection = humanoid.MoveDirection
-    if moveDirection.Magnitude > 0 then
-        local forwardVector = cameraCFrame.LookVector
-        local rightVector = cameraCFrame.RightVector
-        local forwardComponent = moveDirection:Dot(forwardVector) * forwardVector
-        local rightComponent = moveDirection:Dot(rightVector) * rightVector
-        direction = direction + (forwardComponent + rightComponent).Unit * moveDirection.Magnitude
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space) or humanoid.Jump then
-        direction = direction + Vector3.new(0, 1, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-        direction = direction - Vector3.new(0, 1, 0)
-    end
-    bodyVelocity.Velocity = direction.Magnitude > 0 and direction.Unit * (featureStates.FlySpeed * 2) or Vector3.new(0, 0, 0)
-    bodyGyro.CFrame = cameraCFrame
-end
-
-local function Tpwalking()
-    if ToggleTpwalk and character and humanoid and rootPart then
-        local moveDirection = humanoid.MoveDirection
-        local moveDistance = featureStates.TpwalkValue
-        local origin = rootPart.Position
-        local direction = moveDirection * moveDistance
-        local targetPosition = origin + direction
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterDescendantsInstances = {character}
-        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-        local raycastResult = workspace:Raycast(origin, direction, raycastParams)
-        if raycastResult then
-            local hitPosition = raycastResult.Position
-            local distanceToHit = (hitPosition - origin).Magnitude
-            if distanceToHit < math.abs(moveDistance) then
-                targetPosition = origin + (direction.Unit * (distanceToHit - 0.1))
-            end
-        end
-        rootPart.CFrame = CFrame.new(targetPosition) * rootPart.CFrame.Rotation
-        rootPart.CanCollide = true
-    end
-end
-
-local function startTpwalk()
-    ToggleTpwalk = true
-    if TpwalkConnection then
-        TpwalkConnection:Disconnect()
-    end
-    TpwalkConnection = RunService.Heartbeat:Connect(Tpwalking)
-end
-
-local function stopTpwalk()
-    ToggleTpwalk = false
-    if TpwalkConnection then
-        TpwalkConnection:Disconnect()
-        TpwalkConnection = nil
-    end
-    if rootPart then
-        rootPart.CanCollide = false
-    end
-end
-
-local function setupJumpBoost()
-    if not character or not humanoid then return end
-    humanoid.StateChanged:Connect(function(oldState, newState)
-        if newState == Enum.HumanoidStateType.Landed then
-            jumpCount = 0
-        end
-    end)
-    humanoid.Jumping:Connect(function(isJumping)
-        if isJumping and featureStates.JumpBoost and jumpCount < MAX_JUMPS then
-            jumpCount = jumpCount + 1
-            humanoid.JumpHeight = featureStates.JumpPower
-            if jumpCount > 1 then
-                rootPart:ApplyImpulse(Vector3.new(0, featureStates.JumpPower * rootPart.Mass, 0))
-            end
-        end
-    end)
-end
-if featureStates.CustomGravity then
-    workspace.Gravity = featureStates.GravityValue
-else
-    workspace.Gravity = originalGameGravity
-end
-if not featureStates.GravityValue or type(featureStates.GravityValue) ~= "number" then
-    featureStates.GravityValue = originalGameGravity
-end
-local function reapplyFeatures()
-    if featureStates.Fly then
-        if flying then stopFlying() end
-        startFlying()
-    end
-end
-if featureStates.AutoWhistle then
-    stopAutoWhistle()
-    startAutoWhistle()
-end
-local function startJumpBoost()
-    if humanoid then
-        humanoid.JumpPower = featureStates.JumpPower
-    end
-end
-
-local function stopJumpBoost()
-    jumpCount = 0
-    if humanoid then
-        humanoid.JumpPower = 50
-    end
-end
-
-local function startAntiAFK()
-    AntiAFKConnection = player.Idled:Connect(function()
-        VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    end)
-end
-
-local function stopAntiAFK()
-    if AntiAFKConnection then
-        AntiAFKConnection:Disconnect()
-        AntiAFKConnection = nil
-    end
-end
-
-local function startAutoCarry()
-    AutoCarryConnection = RunService.Heartbeat:Connect(function()
-        if not featureStates.AutoCarry then return end
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            for _, other in ipairs(Players:GetPlayers()) do
-                if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (hrp.Position - other.Character.HumanoidRootPart.Position).Magnitude
-                    if dist <= 20 then
-                        local args = { "Carry", [3] = other.Name }
-                        pcall(function()
-                            game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("Character"):WaitForChild("Interact"):FireServer(unpack(args))
-                        end)
-                        task.wait(0.01)
-                    end
-                end
-            end
-        end
-    end)
-end
-
-local function stopAutoCarry()
-    if AutoCarryConnection then
-        AutoCarryConnection:Disconnect()
-        AutoCarryConnection = nil
-    end
-end
-
-local function startFullBright()
-    originalBrightness = Lighting.Brightness
-    originalOutdoorAmbient = Lighting.OutdoorAmbient
-    originalAmbient = Lighting.Ambient
-    originalGlobalShadows = Lighting.GlobalShadows
-    Lighting.Brightness = 2
-    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-    Lighting.GlobalShadows = false
-end
-
-local function stopFullBright()
-    Lighting.Brightness = originalBrightness
-    Lighting.OutdoorAmbient = originalOutdoorAmbient
-    Lighting.Ambient = originalAmbient
-    Lighting.GlobalShadows = originalGlobalShadows
-end
-local function getServerLink()
-    local placeId = game.PlaceId
-    local jobId = game.JobId
-    return string.format("https://www.roblox.com/games/start?placeId=%d&jobId=%s", placeId, jobId)
-end
-
-local function stopNoFog()
-    Lighting.FogEnd = originalFogEnd
-    for _, atmosphere in pairs(originalAtmospheres) do
-        if not atmosphere.Parent then
-            local newAtmosphere = Instance.new("Atmosphere")
-            for _, prop in pairs({"Density", "Offset", "Color", "Decay", "Glare", "Haze"}) do
-                if atmosphere[prop] then
-                    newAtmosphere[prop] = atmosphere[prop]
-                end
-            end
-            newAtmosphere.Parent = Lighting
-        end
-    end
-end
-local function fireVoteServer(mapNumber)
-    local eventsFolder = ReplicatedStorage:WaitForChild("Events", 10)
-    if eventsFolder then
-        local playerFolder = eventsFolder:WaitForChild("Player", 10)
-        if playerFolder then
-            local voteEvent = playerFolder:WaitForChild("Vote", 10)
-            if voteEvent and typeof(voteEvent) == "Instance" and voteEvent:IsA("RemoteEvent") then
-                local args = {[1] = mapNumber}
-                voteEvent:FireServer(unpack(args))
-            end
-        end
-    end
-end
-
-local function startAutoVote()
-    AutoVoteConnection = RunService.Heartbeat:Connect(function()
-        fireVoteServer(featureStates.SelectedMap)
-    end)
-end
-
-local function stopAutoVote()
-    if AutoVoteConnection then
-        AutoVoteConnection:Disconnect()
-        AutoVoteConnection = nil
-    end
-end
-
-local function startAutoSelfRevive()
-    if AutoSelfReviveConnection then
-        AutoSelfReviveConnection:Disconnect()
-    end
-    
-    local character = player.Character
-    if not character then return end
-    
-    AutoSelfReviveConnection = character:GetAttributeChangedSignal("Downed"):Connect(function()
-        local isDowned = character:GetAttribute("Downed")
-        if isDowned and not hasRevived then
-            hasRevived = true
-            task.wait(3)
-            
-            ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
-            
-            task.delay(10, function()
-                hasRevived = false
-            end)
-        end
-    end)
-end
-
-local function stopAutoSelfRevive()
-    if AutoSelfReviveConnection then
-        AutoSelfReviveConnection:Disconnect()
-        AutoSelfReviveConnection = nil
-    end
-    hasRevived = false
-end
-
-local function startAutoWin()
-    AutoWinConnection = RunService.Heartbeat:Connect(function()
-        if character and rootPart then
-            if character:GetAttribute("Downed") then
-                ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
-                task.wait(0.5)
-            end
-            if not character:GetAttribute("Downed") then
-                               local securityPart = Instance.new("Part")
-                securityPart.Name = "SecurityPartTemp"
-                securityPart.Size = Vector3.new(10, 1, 10)
-                securityPart.Position = Vector3.new(0, 500, 0)
-                securityPart.Anchored = true
-                securityPart.Transparency = 1
-                securityPart.CanCollide = true
-                securityPart.Parent = workspace
-                rootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.5)
-                securityPart:Destroy()
-            end
-        end
-    end)
-end
-
-local function stopAutoWin()
-    if AutoWinConnection then
-        AutoWinConnection:Disconnect()
-        AutoWinConnection = nil
-    end
-end
-
-local function startAutoMoneyFarm()
-    AutoMoneyFarmConnection = RunService.Heartbeat:Connect(function()
-        if character and rootPart then
-            local downedPlayerFound = false
-            local playersInGame = workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players")
-            if playersInGame then
-                for _, v in pairs(playersInGame:GetChildren()) do
-                    if v:IsA("Model") and v:GetAttribute("Downed") then
-                        rootPart.CFrame = v.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-                        ReplicatedStorage.Events.Character.Interact:FireServer("Revive", true, v)
-                        task.wait(0.5)
-                        downedPlayerFound = true
-                        break
-                    end
-                end
-            end
-            local securityPart = Instance.new("Part")
-            securityPart.Name = "SecurityPartTemp"
-            securityPart.Size = Vector3.new(10, 1, 10)
-            securityPart.Position = Vector3.new(0, 500, 0)
-            securityPart.Anchored = true
-            securityPart.Transparency = 1
-            securityPart.CanCollide = true
-            securityPart.Parent = workspace
-            rootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
-        end
-    end)
-end
-
-local function stopAutoMoneyFarm()
-    if AutoMoneyFarmConnection then
-        AutoMoneyFarmConnection:Disconnect()
-        AutoMoneyFarmConnection = nil
-    end
-end
-local autoWhistleHandle = nil
-
-local function startAutoWhistle()
-    if autoWhistleHandle then return end  
-    autoWhistleHandle = task.spawn(function()
-        while featureStates.AutoWhistle do
-            pcall(function() 
-                game:GetService("ReplicatedStorage").Events.Character.Whistle:FireServer()
-            end)
-            task.wait(1)
-        end
-    end)
-end
-
-local function stopAutoWhistle()
-    featureStates.AutoWhistle = false
-    if autoWhistleHandle then
-        task.cancel(autoWhistleHandle)
-        autoWhistleHandle = nil
-    end
-end
-local function manualRevive()
-    if character and character:GetAttribute("Downed") then
-        ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
-    end
-end
-
-local function onCharacterAdded(newCharacter, plr)
-    if plr == player then
-        character = newCharacter
-        humanoid = character:WaitForChild("Humanoid", 5)
-        rootPart = character:WaitForChild("HumanoidRootPart", 5)
-        if not humanoid or not rootPart then
-            warn("Failed to find Humanoid or HumanoidRootPart")
-            return
-        end
-        if type(setupJumpBoost) == "function" then
-            setupJumpBoost()
-        else
-            warn("setupJumpBoost is not a function")
-        end
-        if type(reapplyFeatures) == "function" then
-            reapplyFeatures()
-        else
-            warn("reapplyFeatures is not a function")
-        end
-    end
-end
-local function reapplyFeatures()
-print("Test")
-end
-local function onPlayerAdded(plr)
-    plr.CharacterAdded:Connect(function(newCharacter)
-        onCharacterAdded(newCharacter, plr)
-    end)
-    if plr.Character then
-        onCharacterAdded(plr.Character, plr)
-    end
-end
-
-Players.PlayerAdded:Connect(onPlayerAdded)
-
-for _, plr in ipairs(Players:GetPlayers()) do
-    onPlayerAdded(plr)
-end
-
-UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-    if not gameProcessedEvent and input.KeyCode == Enum.KeyCode.Space then
-        if featureStates.InfiniteJump then
-            if featureStates.JumpMethod == "Hold" then
-                isJumpHeld = true
-                bouncePlayer()
-                task.spawn(function()
-                    while isJumpHeld and featureStates.InfiniteJump and featureStates.JumpMethod == "Hold" do
-                        bouncePlayer()
-                        task.wait(0.1)
-                    end
-                end)
-            elseif featureStates.JumpMethod == "Spam" then
-                if not isJumpHeld then
-                    isJumpHeld = true
-                    bouncePlayer()
-                end
-            end
-        end
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input, gameProcessedEvent)
-    if not gameProcessedEvent and input.KeyCode == Enum.KeyCode.Space then
-        isJumpHeld = false
-    end
-end)
-
-local function setupMobileJumpButton()
-    local success, result = pcall(function()
-        local touchGui = player.PlayerGui:WaitForChild("TouchGui", 5)
-        local touchControlFrame = touchGui:WaitForChild("TouchControlFrame", 5)
-        local jumpButton = touchControlFrame:WaitForChild("JumpButton", 5)
-        
-        jumpButton.Activated:Connect(function()
-            if featureStates.InfiniteJump then
-                if featureStates.JumpMethod == "Spam" then
-                    bouncePlayer()
-                elseif featureStates.JumpMethod == "Hold" then
-                    bouncePlayer()
-                end
-            end
-        end)
-
-        jumpButton.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Touch then
-                isJumpHeld = true
-                if featureStates.InfiniteJump and featureStates.JumpMethod == "Hold" then
-                    while isJumpHeld and featureStates.InfiniteJump and featureStates.JumpMethod == "Hold" do
-                        bouncePlayer()
-                        task.wait(0.1)
-                    end
-                end
-            end
-        end)
-
-        jumpButton.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Touch then
-                isJumpHeld = false
-            end
-        end)
-    end)
-    if not success then
-        warn("Failed to set up mobile jump button: " .. tostring(result))
-    end
-end
-
-if player.Character then
-    onCharacterAdded(player.Character, player)
-else
-    player.CharacterAdded:Connect(function(newCharacter)
-        onCharacterAdded(newCharacter, player)
-    end)
-end
-
-RunService.RenderStepped:Connect(updateFly)
-local function setupGui()
-local function getServers()
-    local request = request({
-        Url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Desc&limit=100",
-        Method = "GET",
-    })
-
-    if request.StatusCode == 200 then
-        local serverData = HttpService:JSONDecode(request.Body)
-        local serverList = {}
-
-        for _, server in pairs(serverData.data) do
-            if server.id ~= jobId and server.playing < server.maxPlayers then
-                local serverInfo = {
-                    serverId = server.id or "N/A",
-                    players = server.playing or 0,
-                    maxPlayers = server.maxPlayers or 0,
-                    ping = server.ping or "N/A",
-                }
-                table.insert(serverList, serverInfo)
-            end
-        end
-        return serverList
-    else
-        return {}
-    end
-end
-
-local function serverHop()
-
-local AllIDs = {}
-local foundAnything = ""
-local actualHour = os.date("!*t").hour
-local Deleted = false
-local S_T = game:GetService("TeleportService")
-local S_H = game:GetService("HttpService")
-
-local File = pcall(function()
-	AllIDs = S_H:JSONDecode(readfile("server-hop-temp.json"))
-end)
-if not File then
-	table.insert(AllIDs, actualHour)
-	pcall(function()
-		writefile("server-hop-temp.json", S_H:JSONEncode(AllIDs))
-	end)
-
-end
-local function TPReturner(placeId)
-	local Site;
-	if foundAnything == "" then
-		Site = S_H:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. placeId .. '/servers/Public?sortOrder=Asc&limit=100'))
-	else
-		Site = S_H:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. placeId .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
-	end
-	local ID = ""
-	if Site.nextPageCursor and Site.nextPageCursor ~= "null" and Site.nextPageCursor ~= nil then
-		foundAnything = Site.nextPageCursor
-	end
-	local num = 0;
-	for i,v in pairs(Site.data) do
-		local Possible = true
-		ID = tostring(v.id)
-		if tonumber(v.maxPlayers) > tonumber(v.playing) then
-			for _,Existing in pairs(AllIDs) do
-				if num ~= 0 then
-					if ID == tostring(Existing) then
-						Possible = false
-					end
-				else
-					if tonumber(actualHour) ~= tonumber(Existing) then
-						local delFile = pcall(function()
-							delfile("server-hop-temp.json")
-							AllIDs = {}
-							table.insert(AllIDs, actualHour)
-						end)
-					end
-				end
-				num = num + 1
-			end
-			if Possible == true then
-				table.insert(AllIDs, ID)
-				wait()
-				pcall(function()
-					writefile("server-hop-temp.json", S_H:JSONEncode(AllIDs))
-					wait()
-					S_T:TeleportToPlaceInstance(placeId, ID, game.Players.LocalPlayer)
-				end)
-				wait(4)
-			end
-		end
-	end
-end
-local module = {}
-function module:Teleport(placeId)
-	while wait() do
-		pcall(function()
-			TPReturner(placeId)
-			if foundAnything ~= "" then
-				TPReturner(placeId)
-			end
-		end)
-	end
-end
-module:Teleport(game.PlaceId)
-return module
-end
-
-
-local function rejoinServer()
-    TeleportService:TeleportToPlaceInstance(placeId, jobId)
-end
+}
 
 
 -- Main Tab
@@ -2359,62 +350,51 @@ if success and productInfo then
     placeName = productInfo.Name
 end
 
-Tabs.Main:AddParagraph({
-        Title = "Game mode",
-        Content = placeName
-    })
+Tabs.Main:Paragraph({
+    Title = "Game Mode",
+    Desc = placeName
+})
 
-Tabs.Main:AddButton({
-        Title = "Copy Server Link",
-        Description = "Copy the current server's join link",
-        Callback = function()
-            local serverLink = getServerLink()
-            pcall(function()
-                setclipboard(serverLink)
-            end)
-            Window:Dialog({
-                Title = "Copy Link",
-                Content = "This is just a copy link",
-                Buttons = {
-                    {
-                        Title = "Link Copied",
-                        Callback = function()
-                            print("The server invite link has been copied to your clipborad")
-                        end
-                    },
-                    {
-                        Title = "Link Not Copied",
-                        Callback = function()
-                            print("Error")
-                        end
-                    }
-                }
-            })
-        end
-    })
+Tabs.Main:Button({
+    Title = "Copy Server Link",
+    Desc = "Copy the current server's join link",
+    Icon = "link",
+    Callback = function()
+        local serverLink = getServerLink()
+        pcall(function()
+            setclipboard(serverLink)
+        end)
+        WindUI:Notify({
+                Icon = "link",
+                Title = "Link Copied",
+                Content = "The server invite link has been copied to your clipborad",
+                Duration = 3
+        })
+    end
+})
 
 local numPlayers = #Players:GetPlayers()
 local maxPlayers = Players.MaxPlayers
 
-Tabs.Main:AddParagraph({
-        Title = "Current Players",
-        Content = numPlayers .. " / " .. maxPlayers
+Tabs.Main:Paragraph({
+    Title = "Current Players",
+    Desc = numPlayers .. " / " .. maxPlayers
 })
 
-Tabs.Main:AddParagraph({
-        Title = "Server ID",
-        Content = jobId
+Tabs.Main:Paragraph({
+    Title = "Server ID",
+    Desc = jobId
 })
 
-Tabs.Main:AddParagraph({
-        Title = "Place ID",
-        Content = tostring(placeId)
+Tabs.Main:Paragraph({
+    Title = "Place ID",
+    Desc = tostring(placeId)
 })
 
 Tabs.Main:Section({ Title = "Server Tools", TextSize = 20 })
 Tabs.Main:Divider()
 
-Tabs.Main:AddButton({
+Tabs.Main:Button({
     Title = "Rejoin",
     Desc = "Rejoin the current server",
     Icon = "refresh-cw",
@@ -2423,7 +403,7 @@ Tabs.Main:AddButton({
     end
 })
 
-Tabs.Main:AddButton({
+Tabs.Main:Button({
     Title = "Server Hop",
     Desc = "Hop to a random server",
     Icon = "shuffle",
@@ -2432,7 +412,7 @@ Tabs.Main:AddButton({
     end
 })
 
-Tabs.Main:AddButton({
+Tabs.Main:Button({
     Title = "Hop to Small Server",
     Desc = "Hop to the smallest available server",
     Icon = "minimize",
@@ -2441,7 +421,7 @@ Tabs.Main:AddButton({
     end
 })
 
-Tabs.Main:AddButton({
+Tabs.Main:Button({
        Title = "Advanced Server Hop",
        Desc = "Finding a Server inside your game",
        Icon = "server",
@@ -2464,9 +444,9 @@ Tabs.Main:AddButton({
            end
        end
    })
-   Tabs.Main:AddSection({ Title = "Misc", TextSize = 20 })
-   Tabs.Main:AddDivider()
-   Tabs.Main:AddButton({
+   Tabs.Main:Section({ Title = "Misc", TextSize = 20 })
+   Tabs.Main:Divider()
+   Tabs.Main:Button({
     Title = "Show/Hide Reload button",
     Desc = "This button allow you to use front view mode without keyboard or any tool in vip server",
     Icon = "switch-camera",
