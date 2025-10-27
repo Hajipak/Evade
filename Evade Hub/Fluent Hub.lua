@@ -1,8 +1,10 @@
--- Load WindUI (Atau framework serupa)
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/WindUI/main/source.lua"))()
+-- Load Fluent dan Addons
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -- Buat Window
-local Window = WindUI:CreateWindow({
+local Window = Fluent:CreateWindow({
     Title = "Movement Hub",
     SubTitle = "by Zen",
     TabWidth = 160,
@@ -57,6 +59,7 @@ if not featureStates then
         GravityValue = workspace.Gravity,
         GravityGuiVisible = false,
         AutoCrouchMode = "Air", -- Tambahkan default mode
+        -- Tambahkan state lain jika perlu
     }
 end
 
@@ -65,6 +68,7 @@ if not currentSettings then
         AirStrafeAcceleration = "187",
         JumpCap = "1",
         Speed = "1500",
+        -- Tambahkan setting lain jika perlu
     }
 end
 
@@ -354,17 +358,15 @@ end
 
 -- Buat Tab
 local Tabs = {}
-Tabs.Movement = Window:Tab({ Title = "Movement", Icon = "motion" })
-Tabs.Settings = Window:Tab({ Title = "Settings", Icon = "settings" })
+Tabs.Movement = Window:AddTab({ Title = "Movement", Icon = "motion" })
+Tabs.Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 
 -- Tab Movement
-Tabs.Movement:Section({ Title = "Bhop", TextSize = 20 })
+Tabs.Movement:AddSection({ Title = "Bhop", TextSize = 20 })
 
-local BhopToggle = Tabs.Movement:Toggle({
+local BhopToggle = Tabs.Movement:AddToggle("BhopToggle", {
     Title = "Bhop",
-    Desc = "Enable/Disable Bhop",
-    Icon = "zap",
-    Value = featureStates.Bhop,
+    Default = featureStates.Bhop,
     Callback = function(state)
         featureStates.Bhop = state
         getgenv().autoJumpEnabled = state
@@ -394,7 +396,7 @@ local BhopToggle = Tabs.Movement:Toggle({
     end
 })
 
-local BhopModeDropdown = Tabs.Movement:Dropdown({
+local BhopModeDropdown = Tabs.Movement:AddDropdown("BhopModeDropdown", {
     Title = "Bhop Mode",
     Values = {"Acceleration", "No Acceleration"},
     Multi = false,
@@ -404,11 +406,11 @@ local BhopModeDropdown = Tabs.Movement:Dropdown({
     end
 })
 
-local BhopAccelInput = Tabs.Movement:Input({
+local BhopAccelInput = Tabs.Movement:AddInput("BhopAccelInput", {
     Title = "Bhop Acceleration (Negative Only)",
     Placeholder = "-0.5",
+    Default = tostring(getgenv().bhopAccelValue),
     Numeric = true,
-    Value = tostring(getgenv().bhopAccelValue),
     Callback = function(value)
         if tostring(value):sub(1, 1) == "-" then
             local n = tonumber(value)
@@ -419,11 +421,9 @@ local BhopAccelInput = Tabs.Movement:Input({
     end
 })
 
-local BhopHoldToggle = Tabs.Movement:Toggle({
+local BhopHoldToggle = Tabs.Movement:AddToggle("BhopHoldToggle", {
     Title = "Bhop (Hold Space/Jump)",
-    Desc = "Enable Bhop only when holding jump key",
-    Icon = "activity",
-    Value = featureStates.BhopHold,
+    Default = featureStates.BhopHold,
     Callback = function(state)
         featureStates.BhopHold = state
         getgenv().bhopHoldActive = state
@@ -432,11 +432,9 @@ local BhopHoldToggle = Tabs.Movement:Toggle({
 })
 
 -- Tombol untuk menampilkan/menyembunyikan GUI Bhop
-local BhopGuiToggle = Tabs.Movement:Toggle({
+local BhopGuiToggle = Tabs.Movement:AddToggle("BhopGuiToggle", {
     Title = "Bhop GUI Toggle",
-    Desc = "Show/Hide Bhop GUI",
-    Icon = "toggle-right",
-    Value = featureStates.BhopGuiVisible,
+    Default = featureStates.BhopGuiVisible,
     Callback = function(state)
         featureStates.BhopGuiVisible = state
         if bhopGui then
@@ -445,13 +443,11 @@ local BhopGuiToggle = Tabs.Movement:Toggle({
     end
 })
 
-Tabs.Movement:Section({ Title = "Infinite Slide", TextSize = 20 })
+Tabs.Movement:AddSection({ Title = "Infinite Slide", TextSize = 20 })
 
-local InfiniteSlideToggle = Tabs.Movement:Toggle({
+local InfiniteSlideToggle = Tabs.Movement:AddToggle("InfiniteSlideToggle", {
     Title = "Infinite Slide",
-    Desc = "Enable/Disable Infinite Slide",
-    Icon = "skull",
-    Value = false,
+    Default = false,
     Callback = function(state)
         infiniteSlideEnabled = state
         if slideConnection then
@@ -471,11 +467,11 @@ local InfiniteSlideToggle = Tabs.Movement:Toggle({
     end
 })
 
-local InfiniteSlideSpeedInput = Tabs.Movement:Input({
+local InfiniteSlideSpeedInput = Tabs.Movement:AddInput("InfiniteSlideSpeedInput", {
     Title = "Set Infinite Slide Speed (Negative Only)",
     Placeholder = "-8 (negative only)",
+    Default = tostring(getgenv().slideSpeed),
     Numeric = true,
-    Value = tostring(getgenv().slideSpeed),
     Callback = function(text)
         local num = tonumber(text)
         if num and num < 0 then
@@ -488,28 +484,26 @@ local InfiniteSlideSpeedInput = Tabs.Movement:Input({
     end
 })
 
-Tabs.Movement:Section({ Title = "Player Movement", TextSize = 20 })
+Tabs.Movement:AddSection({ Title = "Player Movement", TextSize = 20 })
 
-local JumpCapInput = Tabs.Movement:Input({
+local JumpCapInput = Tabs.Movement:AddInput("JumpCapInput", {
     Title = "Set Jump Cap",
-    Desc = "Limit the maximum jump height",
     Icon = "chevrons-up",
     Placeholder = "Default 1",
-    Value = currentSettings.JumpCap,
+    Default = currentSettings.JumpCap,
     Callback = createValidatedInput({field = "JumpCap", min = 0.1, max = 5088888})
 })
 
-local StrafeInput = Tabs.Movement:Input({
+local StrafeInput = Tabs.Movement:AddInput("StrafeInput", {
     Title = "Strafe Acceleration",
-    Desc = "Adjust air strafe acceleration",
     Icon = "wind",
     Placeholder = "Default 187",
-    Value = currentSettings.AirStrafeAcceleration,
+    Default = currentSettings.AirStrafeAcceleration,
     Callback = createValidatedInput({field = "AirStrafeAcceleration", min = 1, max = 1000888888})
 })
 
 -- Tambahkan ApplyMode Dropdown di sini, di bawah Strafe Acceleration
-local ApplyMethodDropdown = Tabs.Movement:Dropdown({
+local ApplyMethodDropdown = Tabs.Movement:AddDropdown("ApplyMethodDropdown", {
     Title = "Select Apply Method",
     Values = { "None", "Not Optimized", "Optimized" }, -- Tambahkan "None"
     Multi = false,
@@ -520,13 +514,11 @@ local ApplyMethodDropdown = Tabs.Movement:Dropdown({
     end
 })
 
-Tabs.Movement:Section({ Title = "Bounce", TextSize = 20 })
+Tabs.Movement:AddSection({ Title = "Bounce", TextSize = 20 })
 
-local BounceToggle = Tabs.Movement:Toggle({
+local BounceToggle = Tabs.Movement:AddToggle("BounceToggle", {
     Title = "Enable Bounce",
-    Desc = "Enable/Disable Bounce",
-    Icon = "arrow-down-circle",
-    Value = getgenv().bounceEnabled,
+    Default = getgenv().bounceEnabled,
     Callback = function(state)
         getgenv().bounceEnabled = state
         if state then
@@ -540,11 +532,11 @@ local BounceToggle = Tabs.Movement:Toggle({
     end
 })
 
-local BounceHeightInput = Tabs.Movement:Input({
+local BounceHeightInput = Tabs.Movement:AddInput("BounceHeightInput", {
     Title = "Bounce Height",
     Placeholder = "0",
+    Default = tostring(getgenv().bounceHeight),
     Numeric = true,
-    Value = tostring(getgenv().bounceHeight),
     Callback = function(value)
         local num = tonumber(value)
         if num then
@@ -553,11 +545,11 @@ local BounceHeightInput = Tabs.Movement:Input({
     end
 })
 
-local EpsilonInput = Tabs.Movement:Input({
+local EpsilonInput = Tabs.Movement:AddInput("EpsilonInput", {
     Title = "Touch Detection Epsilon",
     Placeholder = "0.1",
+    Default = tostring(getgenv().bounceEpsilon),
     Numeric = true,
-    Value = tostring(getgenv().bounceEpsilon),
     Callback = function(value)
         local num = tonumber(value)
         if num then
@@ -566,13 +558,11 @@ local EpsilonInput = Tabs.Movement:Input({
     end
 })
 
-Tabs.Movement:Section({ Title = "Auto Features", TextSize = 20 })
+Tabs.Movement:AddSection({ Title = "Auto Features", TextSize = 20 })
 
-local AutoCrouchToggle = Tabs.Movement:Toggle({
+local AutoCrouchToggle = Tabs.Movement:AddToggle("AutoCrouchToggle", {
     Title = "Auto Crouch",
-    Desc = "Automatically crouch based on mode",
-    Icon = "minimize-2",
-    Value = featureStates.AutoCrouch,
+    Default = featureStates.AutoCrouch,
     Callback = function(state)
         featureStates.AutoCrouch = state
         getgenv().autoCrouchEnabled = state
@@ -584,11 +574,9 @@ local AutoCrouchToggle = Tabs.Movement:Toggle({
     end
 })
 
-local AutoCarryToggle = Tabs.Movement:Toggle({
+local AutoCarryToggle = Tabs.Movement:AddToggle("AutoCarryToggle", {
     Title = "Auto Carry",
-    Desc = "Automatically carry nearby players",
-    Icon = "user-plus",
-    Value = featureStates.AutoCarry,
+    Default = featureStates.AutoCarry,
     Callback = function(state)
         featureStates.AutoCarry = state
         if state then
@@ -599,11 +587,9 @@ local AutoCarryToggle = Tabs.Movement:Toggle({
     end
 })
 
-local CustomGravityToggle = Tabs.Movement:Toggle({
+local CustomGravityToggle = Tabs.Movement:AddToggle("CustomGravityToggle", {
     Title = "Custom Gravity",
-    Desc = "Enable custom gravity setting",
-    Icon = "globe",
-    Value = featureStates.CustomGravity,
+    Default = featureStates.CustomGravity,
     Callback = function(state)
         featureStates.CustomGravity = state
         getgenv().customGravityEnabled = state
@@ -624,12 +610,11 @@ local CustomGravityToggle = Tabs.Movement:Toggle({
     end
 })
 
-local GravityValueInput = Tabs.Movement:Input({
+local GravityValueInput = Tabs.Movement:AddInput("GravityValueInput", {
     Title = "Gravity Value",
-    Desc = "Set the gravity value (-196.2 is default)",
     Placeholder = tostring(originalGravity),
+    Default = tostring(getgenv().customGravityValue),
     Numeric = true,
-    Value = tostring(getgenv().customGravityValue),
     Callback = function(text)
         local num = tonumber(text)
         if num then
@@ -642,11 +627,9 @@ local GravityValueInput = Tabs.Movement:Input({
 })
 
 -- Tombol untuk menampilkan/menyembunyikan GUI Auto Crouch
-local AutoCrouchGuiToggle = Tabs.Movement:Toggle({
+local AutoCrouchGuiToggle = Tabs.Movement:AddToggle("AutoCrouchGuiToggle", {
     Title = "Auto Crouch GUI Toggle",
-    Desc = "Show/Hide Auto Crouch GUI",
-    Icon = "toggle-right",
-    Value = featureStates.AutoCrouchGuiVisible,
+    Default = featureStates.AutoCrouchGuiVisible,
     Callback = function(state)
         featureStates.AutoCrouchGuiVisible = state
         if autoCrouchGui then
@@ -656,11 +639,9 @@ local AutoCrouchGuiToggle = Tabs.Movement:Toggle({
 })
 
 -- Tombol untuk menampilkan/menyembunyikan GUI Auto Carry
-local AutoCarryGuiToggle = Tabs.Movement:Toggle({
+local AutoCarryGuiToggle = Tabs.Movement:AddToggle("AutoCarryGuiToggle", {
     Title = "Auto Carry GUI Toggle",
-    Desc = "Show/Hide Auto Carry GUI",
-    Icon = "toggle-right",
-    Value = featureStates.AutoCarryGuiVisible,
+    Default = featureStates.AutoCarryGuiVisible,
     Callback = function(state)
         featureStates.AutoCarryGuiVisible = state
         if autoCarryGui then
@@ -670,11 +651,9 @@ local AutoCarryGuiToggle = Tabs.Movement:Toggle({
 })
 
 -- Tombol untuk menampilkan/menyembunyikan GUI Gravity
-local GravityGuiToggle = Tabs.Movement:Toggle({
+local GravityGuiToggle = Tabs.Movement:AddToggle("GravityGuiToggle", {
     Title = "Gravity GUI Toggle",
-    Desc = "Show/Hide Gravity GUI",
-    Icon = "toggle-right",
-    Value = featureStates.GravityGuiVisible,
+    Default = featureStates.GravityGuiVisible,
     Callback = function(state)
         featureStates.GravityGuiVisible = state
         if gravityGui then
@@ -683,13 +662,13 @@ local GravityGuiToggle = Tabs.Movement:Toggle({
     end
 })
 
-Tabs.Movement:Section({ Title = "Feature GUI Toggles (Button Size)", TextSize = 20 })
+Tabs.Movement:AddSection({ Title = "Feature GUI Toggles (Button Size)", TextSize = 20 })
 
-local ButtonSizeXInput = Tabs.Movement:Input({
+local ButtonSizeXInput = Tabs.Movement:AddInput("ButtonSizeXInput", {
     Title = "Button Size X",
     Placeholder = "60",
+    Default = tostring(getgenv().guiButtonSizeX),
     Numeric = true,
-    Value = tostring(getgenv().guiButtonSizeX),
     Callback = function(input)
         local val = tonumber(input)
         if val then
@@ -703,11 +682,11 @@ local ButtonSizeXInput = Tabs.Movement:Input({
     end
 })
 
-local ButtonSizeYInput = Tabs.Movement:Input({
+local ButtonSizeYInput = Tabs.Movement:AddInput("ButtonSizeYInput", {
     Title = "Button Size Y",
     Placeholder = "60",
+    Default = tostring(getgenv().guiButtonSizeY),
     Numeric = true,
-    Value = tostring(getgenv().guiButtonSizeY),
     Callback = function(input)
         local val = tonumber(input)
         if val then
@@ -721,26 +700,24 @@ local ButtonSizeYInput = Tabs.Movement:Input({
     end
 })
 
--- Konfigurasi SaveManager dan InterfaceManager (Jika tersedia)
--- SaveManager:SetLibrary(WindUI)
--- InterfaceManager:SetLibrary(WindUI)
--- SaveManager:IgnoreThemeSettings()
--- SaveManager:SetIgnoreIndexes({})
--- InterfaceManager:SetFolder("WindMovementHub")
--- SaveManager:SetFolder("WindMovementHub/specific-game")
--- InterfaceManager:BuildInterfaceSection(Tabs.Settings)
--- SaveManager:BuildConfigSection(Tabs.Settings)
--- Window:SelectTab(1)
+-- Konfigurasi SaveManager dan InterfaceManager
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("FluentMovementHub")
+SaveManager:SetFolder("FluentMovementHub/specific-game")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+Window:SelectTab(1)
 
--- Notifikasi
-WindUI:Notify({
+Fluent:Notify({
     Title = "Movement Hub",
     Content = "The Movement Hub has been loaded.",
     Duration = 5
 })
 
--- Muat konfigurasi otomatis (Jika tersedia)
--- SaveManager:LoadAutoloadConfig()
+SaveManager:LoadAutoloadConfig()
 
 -- --- Pembuatan GUI Tombol ---
 local playerGui = player:WaitForChild("PlayerGui")
