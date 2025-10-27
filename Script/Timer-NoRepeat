@@ -21,12 +21,11 @@ local function CreateTimerGUI()
     local TimerGradient = Instance.new("UIGradient")
     local CountdownBorder = Instance.new("UIStroke")
 
-    -- Properties:
     MainInterface.Name = "MainInterface"
     MainInterface.Parent = PlayerGui
     MainInterface.ResetOnSpawn = false
     MainInterface.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    MainInterface.Enabled = true -- Enable by default to run on execution
+    MainInterface.Enabled = true
 
     TimerContainer.Name = "TimerContainer"
     TimerContainer.Parent = MainInterface
@@ -37,6 +36,7 @@ local function CreateTimerGUI()
     TimerContainer.Position = UDim2.new(0.5, 0, 0, 0)
     TimerContainer.Size = UDim2.new(1, 0, 1, 0)
     TimerContainer.Visible = false
+
     AspectRatio.Parent = TimerContainer
 
     SizeLimit.Parent = TimerContainer
@@ -58,8 +58,8 @@ local function CreateTimerGUI()
 
     BorderOutline.Parent = TimerDisplay
     BorderOutline.Thickness = 1
-    BorderOutline.Color = Color3.fromRGB(0, 0, 0) -- Black
-    BorderOutline.Transparency = 0.8 -- 0.8 transparency
+    BorderOutline.Color = Color3.fromRGB(0, 0, 0)
+    BorderOutline.Transparency = 0.8
 
     PanelBackground.Name = "PanelBackground"
     PanelBackground.Parent = TimerDisplay
@@ -142,39 +142,69 @@ local function CreateTimerGUI()
     CountdownBorder.Color = Color3.fromRGB(0, 0, 0)
     CountdownBorder.Transparency = 0.5
 
-    return CountdownText, StatusText, MainInterface
+    return CountdownText, StatusText, MainInterface, TimerContainer
 end
 
-local TimerLabel, StatusLabel, MainInterface = CreateTimerGUI()
+local TimerLabel, StatusLabel, MainInterface, TimerContainer = CreateTimerGUI()
 
 local statsFolder = workspace:WaitForChild("Game"):WaitForChild("Stats")
-local roundTimer = PlayerGui:WaitForChild("Menu"):WaitForChild("IntermissionTimer"):WaitForChild("RoundTimer")
 
-local function updateUIVisibility()
-    local aboutValue = roundTimer:GetAttribute("About")
-    local toggleState = VisualsTab and VisualsTab:GetValue("Game Timer Display") or true
+local timerConnection
 
-    MainInterface.Enabled = toggleState and aboutValue ~= "INTERMISSION"
+local function formatTime(seconds)
+    if not seconds then return "0:00" end
+    
+    seconds = math.floor(tonumber(seconds) or 0)
+    local minutes = math.floor(seconds / 60)
+    local remainingSeconds = seconds % 60
+    
+    return string.format("%d:%02d", minutes, remainingSeconds)
 end
 
-RunService.Heartbeat:Connect(function()
-    updateUIVisibility()
-    if MainInterface.Enabled then
-        local timerValue = statsFolder:GetAttribute("Timer")
-        if timerValue then
-            local minutes = math.floor(timerValue / 60)
-            local seconds = math.floor(timerValue % 60)
-            TimerLabel.Text = string.format("%d:%02d", minutes, seconds)
+local function setupTimerConnection()
+    if timerConnection then
+        timerConnection:Disconnect()
+    end
+    
+    if statsFolder then
+        timerConnection = statsFolder:GetAttributeChangedSignal("Timer"):Connect(function()
+            local timerValue = statsFolder:GetAttribute("Timer")
+            local roundStarted = statsFolder:GetAttribute("RoundStarted")
             
-            TimerLabel.TextColor3 = timerValue <= 5 and Color3.fromRGB(215, 100, 100) or Color3.fromRGB(165, 194, 255)
+            TimerLabel.Text = formatTime(timerValue)
             
-            StatusLabel.Text = statsFolder:GetAttribute("RoundStarted") and "ROUND ACTIVE" or "INTERMISSION"
-        else
-            TimerLabel.Text = "0:00"
-            TimerLabel.TextColor3 = Color3.fromRGB(165, 194, 255)
-            StatusLabel.Text = "INTERMISSION"
-        end
+            TimerLabel.TextColor3 = timerValue and timerValue <= 5 and Color3.fromRGB(215, 100, 100) or Color3.fromRGB(165, 194, 255)
+            
+            StatusLabel.Text = roundStarted and "ROUND ACTIVE" or "INTERMISSION"
+        end)
+        
+        local initialTimer = statsFolder:GetAttribute("Timer")
+        local initialRoundStarted = statsFolder:GetAttribute("RoundStarted")
+        
+        TimerLabel.Text = formatTime(initialTimer)
+        TimerLabel.TextColor3 = initialTimer and initialTimer <= 5 and Color3.fromRGB(215, 100, 100) or Color3.fromRGB(165, 194, 255)
+        StatusLabel.Text = initialRoundStarted and "ROUND ACTIVE" or "INTERMISSION"
+    end
+end
+
+setupTimerConnection()
+
+local folderAddedConnection
+folderAddedConnection = workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Game" then
+        local gameFolder = child:WaitForChild("Stats")
+        statsFolder = gameFolder
+        setupTimerConnection()
     end
 end)
 
-roundTimer:GetAttributeChangedSignal("About"):Connect(updateUIVisibility)
+local function cleanupTimer()
+    if timerConnection then
+        timerConnection:Disconnect()
+        timerConnection = nil
+    end
+    if folderAddedConnection then
+        folderAddedConnection:Disconnect()
+        folderAddedConnection = nil
+    end
+end
