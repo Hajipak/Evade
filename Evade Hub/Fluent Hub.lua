@@ -13,7 +13,6 @@ local Window = Fluent:CreateWindow({
 })
 
 --Fluent provides Lucide Icons https://lucide.dev/icons/ for the tabs, icons are optional
-local Tabs = {}
 
 -- Services
 local Players = game:GetService("Players")
@@ -170,10 +169,11 @@ local function applyStoredSettings()
     end
 end
 
--- Buat Tab Utama
-Tabs.Main = Window:AddTab({ Title = "Main", Icon = "home" })
-Tabs.Movement = Window:AddTab({ Title = "Movement", Icon = "motion" })
-Tabs.Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+local Tabs = {}
+  Tabs.Main = Window:AddTab({ Title = "Main", Icon = "home" })
+  Tabs.Movement = Window:AddTab({ Title = "Movement", Icon = "motion" })
+  Tabs.Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
 
 -- Tab Main
 Tabs.Main:AddParagraph("Welcome", "Welcome to Zen Hub v" .. Fluent.Version)
