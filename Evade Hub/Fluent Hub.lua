@@ -12,6 +12,9 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl -- Used when theres no MinimizeKeybind
 })
 
+--Fluent provides Lucide Icons https://lucide.dev/icons/ for the tabs, icons are optional
+-- local Tabs = {} -- Didefinisikan setelah Window
+
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -82,6 +85,82 @@ local bhopGui, bhopGuiButton
 local autoCarryGui, autoCarryGuiButton
 local autoCrouchGui, autoCrouchGuiButton
 local gravityGui, gravityGuiButton
+
+-- Buat Toggle Button UI Eksternal (Hanya Gambar) - DITEMPATKAN DI ATAS
+local ToggleScreenGui = Instance.new("ScreenGui")
+ToggleScreenGui.Name = "ToggleUI"
+ToggleScreenGui.ResetOnSpawn = false
+ToggleScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ToggleScreenGui.Parent = playerGui
+
+local ToggleImageButton = Instance.new("ImageButton")
+ToggleImageButton.Name = "ToggleImageButton"
+ToggleImageButton.Size = UDim2.new(0, getgenv().toggleButtonSizeX, 0, getgenv().toggleButtonSizeY) -- Gunakan ukuran dari variabel
+ToggleImageButton.Position = UDim2.new(0, 10, 0.02, 0) -- Atur posisi di atas (0.02 dari atas)
+ToggleImageButton.BackgroundTransparency = 1 -- Transparan
+ToggleImageButton.BorderSizePixel = 0
+ToggleImageButton.Image = "rbxassetid://75870247392911" -- Ganti dengan ID aset Roblox Anda
+ToggleImageButton.ImageColor3 = Color3.fromRGB(255, 255, 255) -- Warna gambar (default putih)
+ToggleImageButton.ImageTransparency = 0 -- Transparansi gambar (0 = tidak transparan)
+ToggleImageButton.Parent = ToggleScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12) -- Atur radius sesuai keinginan
+UICorner.Parent = ToggleImageButton
+
+-- Variable untuk track UI state
+local UIVisible = true
+
+-- Fungsi untuk toggle UI
+local function toggleUI()
+    UIVisible = not UIVisible
+    if Window and Window.Root then
+        Window.Root.Visible = UIVisible
+    end
+    -- (Opsional) Ubah transparansi gambar berdasarkan status
+    -- ToggleImageButton.ImageTransparency = UIVisible and 0 or 0.5
+end
+
+-- Click event
+ToggleImageButton.MouseButton1Click:Connect(toggleUI)
+
+-- Drag functionality untuk mobile dan PC
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    local targetPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    TweenService:Create(ToggleImageButton, TweenInfo.new(0.2), {Position = targetPosition}):Play()
+end
+
+ToggleImageButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = ToggleImageButton.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+ToggleImageButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
 
 -- Fungsi Validasi Input
 if not createValidatedInput then
@@ -169,12 +248,11 @@ local function applyStoredSettings()
     end
 end
 
---Fluent provides Lucide Icons https://lucide.dev/icons/ for the tabs, icons are optional
+-- Buat Tab Utama (setelah variabel dan fungsi lainnya didefinisikan)
 local Tabs = {}
-  Tabs.Main = Window:AddTab({ Title = "Main", Icon = "home" })
-  Tabs.Movement = Window:AddTab({ Title = "Movement", Icon = "motion" })
-  Tabs.Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
-}
+Tabs.Main = Window:AddTab({ Title = "Main", Icon = "home" })
+Tabs.Movement = Window:AddTab({ Title = "Movement", Icon = "motion" })
+Tabs.Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 
 -- Tab Main
 Tabs.Main:AddParagraph("Welcome", "Welcome to Zen Hub v" .. Fluent.Version)
@@ -901,85 +979,6 @@ gravityGuiButton.MouseButton1Click:Connect(function()
         workspace.Gravity = getgenv().customGravityValue
     else
         workspace.Gravity = originalGravity
-    end
-end)
-
--- Buat Toggle Button UI Eksternal (Hanya Gambar)
-local ToggleScreenGui = Instance.new("ScreenGui")
-ToggleScreenGui.Name = "ToggleUI"
-ToggleScreenGui.ResetOnSpawn = false
-ToggleScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ToggleScreenGui.Parent = playerGui
-
-local ToggleImageButton = Instance.new("ImageButton")
-ToggleImageButton.Name = "ToggleImageButton"
-ToggleImageButton.Size = UDim2.new(0, getgenv().toggleButtonSizeX, 0, getgenv().toggleButtonSizeY) -- Gunakan ukuran dari variabel
-ToggleImageButton.Position = UDim2.new(0, 10, 0.5, -getgenv().toggleButtonSizeY/2) -- Atur posisi sesuai keinginan
-ToggleImageButton.BackgroundTransparency = 1 -- Transparan
-ToggleImageButton.BorderSizePixel = 0
-ToggleImageButton.Image = "rbxassetid://75870247392911" -- Ganti dengan ID aset Roblox Anda
-ToggleImageButton.ImageColor3 = Color3.fromRGB(255, 255, 255) -- Warna gambar (default putih)
-ToggleImageButton.ImageTransparency = 0 -- Transparansi gambar (0 = tidak transparan)
-ToggleImageButton.Parent = ToggleScreenGui
-
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 12) -- Atur radius sesuai keinginan
-UICorner.Parent = ToggleImageButton
-
--- Variable untuk track UI state
-local UIVisible = true
-
--- Fungsi untuk toggle UI
-local function toggleUI()
-    UIVisible = not UIVisible
-    if Window and Window.Root then
-        Window.Root.Visible = UIVisible
-    end
-    -- (Opsional) Ubah transparansi gambar berdasarkan status
-    -- ToggleImageButton.ImageTransparency = UIVisible and 0 or 0.5
-end
-
--- Click event
-ToggleImageButton.MouseButton1Click:Connect(toggleUI)
-
--- Drag functionality untuk mobile dan PC
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-
-local dragging
-local dragInput
-local dragStart
-local startPos
-
-local function update(input)
-    local delta = input.Position - dragStart
-    local targetPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    TweenService:Create(ToggleImageButton, TweenInfo.new(0.2), {Position = targetPosition}):Play()
-end
-
-ToggleImageButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = ToggleImageButton.Position
-
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-ToggleImageButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        update(input)
     end
 end)
 
