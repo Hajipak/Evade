@@ -13,6 +13,7 @@ local Window = Fluent:CreateWindow({
 })
 
 --Fluent provides Lucide Icons https://lucide.dev/icons/ for the tabs, icons are optional
+local Tabs = {}
 
 -- Services
 local Players = game:GetService("Players")
@@ -42,6 +43,8 @@ if not getgenv().customGravityValue then getgenv().customGravityValue = workspac
 if not getgenv().slideSpeed then getgenv().slideSpeed = -8 end
 if not getgenv().guiButtonSizeX then getgenv().guiButtonSizeX = 60 end
 if not getgenv().guiButtonSizeY then getgenv().guiButtonSizeY = 60 end
+if not getgenv().toggleButtonSizeX then getgenv().toggleButtonSizeX = 60 end -- Ukuran default tombol toggle
+if not getgenv().toggleButtonSizeY then getgenv().toggleButtonSizeY = 60 end -- Ukuran default tombol toggle
 
 if not featureStates then
     featureStates = {
@@ -169,76 +172,13 @@ local function applyStoredSettings()
     end
 end
 
-local Tabs = {}
-  Tabs.Main = Window:AddTab({ Title = "Main", Icon = "home" })
-  Tabs.Movement = Window:AddTab({ Title = "Movement", Icon = "motion" })
-  Tabs.Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
-}
+-- Buat Tab Utama
+Tabs.Main = Window:AddTab({ Title = "Main", Icon = "home" })
+Tabs.Movement = Window:AddTab({ Title = "Movement", Icon = "motion" })
+Tabs.Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 
 -- Tab Main
 Tabs.Main:AddParagraph("Welcome", "Welcome to Zen Hub v" .. Fluent.Version)
-
--- Tambahkan tombol Minimize/Restore UI di Tab Main
-local minimizeRestoreText = "Minimize UI"
-local minimizeRestoreIcon = "minimize-2"
-local MinimizeRestoreButton = Tabs.Main:AddButton("MinimizeRestoreUI", {
-    Title = minimizeRestoreText,
-    Description = "Minimize/Restore the entire UI window",
-    Icon = minimizeRestoreIcon,
-    Callback = function()
-        -- Cek apakah UI sedang diminimalkan
-        local isMinimized = false
-        local success, result = pcall(function() return Window:IsMinimized() end)
-        if success then
-            isMinimized = result
-        else
-            -- Jika Window:IsMinimized() tidak ada, coba cek apakah window utama terlihat
-            -- atau gunakan variabel internal.
-            -- Asumsikan bahwa jika kita menekan tombol, maka statusnya akan berubah.
-            -- Kita coba minimize terlebih dahulu.
-            local success_min = pcall(function() Window:Minimize() end)
-            if success_min then
-                MinimizeRestoreButton:Set({ Title = "Restore UI", Icon = "maximize-2" })
-                return -- Keluar dari callback setelah minimize
-            else
-                -- Jika minimize gagal, coba restore
-                local success_restore = pcall(function() Window:Restore() end)
-                if success_restore then
-                    MinimizeRestoreButton:Set({ Title = "Minimize UI", Icon = "minimize-2" })
-                else
-                    -- Jika keduanya gagal, coba Toggle (fallback)
-                    local success_toggle = pcall(function() Window:Toggle() end)
-                    if success_toggle then
-                        -- Karena Toggle tidak selalu meminimalkan ke ikon,
-                        -- kita asumsikan status berubah dan coba perbarui tombol berdasarkan itu.
-                        -- Jika toggle, mungkin tidak ada cara mudah untuk tahu apakah tersembunyi atau tidak sepenuhnya.
-                        -- Untuk saat ini, kita tetap gunakan ikon minimize/maximize.
-                        -- Coba cek visibilitas frame utama secara manual jika perlu.
-                        local mainFrameVisible = false
-                        local frameSuccess, frameResult = pcall(function() return Window.Frame.Visible end)
-                        if frameSuccess then
-                            mainFrameVisible = frameResult
-                        end
-                        if mainFrameVisible then
-                             MinimizeRestoreButton:Set({ Title = "Minimize UI", Icon = "minimize-2" })
-                        else
-                             MinimizeRestoreButton:Set({ Title = "Restore UI", Icon = "maximize-2" })
-                        end
-                    end
-                end
-            end
-        else
-            -- Jika IsMinimized tersedia
-            if isMinimized then
-                Window:Restore()
-                MinimizeRestoreButton:Set({ Title = "Minimize UI", Icon = "minimize-2" })
-            else
-                Window:Minimize()
-                MinimizeRestoreButton:Set({ Title = "Restore UI", Icon = "maximize-2" })
-            end
-        end
-    end
-})
 
 -- Main Settings Section
 Tabs.Main:AddSection({ Title = "Main Settings", TextSize = 20 })
@@ -962,6 +902,85 @@ gravityGuiButton.MouseButton1Click:Connect(function()
         workspace.Gravity = getgenv().customGravityValue
     else
         workspace.Gravity = originalGravity
+    end
+end)
+
+-- Buat Toggle Button UI Eksternal (Hanya Gambar)
+local ToggleScreenGui = Instance.new("ScreenGui")
+ToggleScreenGui.Name = "ToggleUI"
+ToggleScreenGui.ResetOnSpawn = false
+ToggleScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ToggleScreenGui.Parent = playerGui
+
+local ToggleImageButton = Instance.new("ImageButton")
+ToggleImageButton.Name = "ToggleImageButton"
+ToggleImageButton.Size = UDim2.new(0, getgenv().toggleButtonSizeX, 0, getgenv().toggleButtonSizeY) -- Gunakan ukuran dari variabel
+ToggleImageButton.Position = UDim2.new(0, 10, 0.5, -getgenv().toggleButtonSizeY/2) -- Atur posisi sesuai keinginan
+ToggleImageButton.BackgroundTransparency = 1 -- Transparan
+ToggleImageButton.BorderSizePixel = 0
+ToggleImageButton.Image = "rbxassetid://75870247392911" -- Ganti dengan ID aset Roblox Anda
+ToggleImageButton.ImageColor3 = Color3.fromRGB(255, 255, 255) -- Warna gambar (default putih)
+ToggleImageButton.ImageTransparency = 0 -- Transparansi gambar (0 = tidak transparan)
+ToggleImageButton.Parent = ToggleScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12) -- Atur radius sesuai keinginan
+UICorner.Parent = ToggleImageButton
+
+-- Variable untuk track UI state
+local UIVisible = true
+
+-- Fungsi untuk toggle UI
+local function toggleUI()
+    UIVisible = not UIVisible
+    if Window and Window.Root then
+        Window.Root.Visible = UIVisible
+    end
+    -- (Opsional) Ubah transparansi gambar berdasarkan status
+    -- ToggleImageButton.ImageTransparency = UIVisible and 0 or 0.5
+end
+
+-- Click event
+ToggleImageButton.MouseButton1Click:Connect(toggleUI)
+
+-- Drag functionality untuk mobile dan PC
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    local targetPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    TweenService:Create(ToggleImageButton, TweenInfo.new(0.2), {Position = targetPosition}):Play()
+end
+
+ToggleImageButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = ToggleImageButton.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+ToggleImageButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
     end
 end)
 
