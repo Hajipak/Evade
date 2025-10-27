@@ -44,6 +44,7 @@ local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 local workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Debris = game:GetService("Debris")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -56,7 +57,7 @@ local featureStates = {
     AutoCrouch = false,
     GravityValue = workspace.Gravity,
     AutoCrouchMode = "Air",
-    Bounce = false, -- Added for Bounce toggle state
+    -- Bounce state is now handled by the toggle itself
 }
 
 local originalGameGravity = workspace.Gravity
@@ -83,6 +84,78 @@ local currentSettings = {
     JumpCap = "1",
     Speed = "1500"
 }
+
+-- Bounce Variables (Based on DaraHub code)
+local BOUNCE_HEIGHT = 0 -- Default value, will be loaded from config
+local BOUNCE_EPSILON = 0.1 -- Default value, will be loaded from config
+local BOUNCE_ENABLED = false -- Default value, will be loaded from config
+local touchConnections = {}
+
+-- Function to setup bounce on touch for a character (Based on DaraHub code)
+local function setupBounceOnTouch(character)
+    if not BOUNCE_ENABLED then return end
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+    -- Disconnect any existing connection for this character
+    if touchConnections[character] then
+        touchConnections[character]:Disconnect()
+        touchConnections[character] = nil
+    end
+
+    local touchConnection
+    touchConnection = humanoidRootPart.Touched:Connect(function(hit)
+        if not BOUNCE_ENABLED or not hit or hit.Parent == character then return end
+
+        -- Calculate Y position boundaries
+        local playerBottom = humanoidRootPart.Position.Y - humanoidRootPart.Size.Y / 2
+        local playerTop = humanoidRootPart.Position.Y + humanoidRootPart.Size.Y / 2
+        local hitBottom = hit.Position.Y - hit.Size.Y / 2
+        local hitTop = hit.Position.Y + hit.Size.Y / 2
+
+        -- Check if hit is above the player (don't bounce)
+        if hitTop <= playerBottom + BOUNCE_EPSILON then
+            return
+        -- Check if hit is below the player (don't bounce)
+        elseif hitBottom >= playerTop - BOUNCE_EPSILON then
+            return
+        end
+
+        -- Fire remote event if needed (e.g., for game interaction)
+        -- local remoteEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("Character"):WaitForChild("PassCharacterInfo")
+        -- remoteEvent:FireServer({}, {2})
+
+        if BOUNCE_HEIGHT > 0 then
+            local bodyVel = Instance.new("BodyVelocity")
+            bodyVel.MaxForce = Vector3.new(0, math.huge, 0) -- Infinite force on Y-axis
+            bodyVel.Velocity = Vector3.new(0, BOUNCE_HEIGHT, 0)
+            bodyVel.Parent = humanoidRootPart
+            Debris:AddItem(bodyVel, 0.2)
+        end
+    end)
+
+    touchConnections[character] = touchConnection
+
+    -- Clean up connection when character is removed
+    character.AncestryChanged:Connect(function()
+        if not character.Parent then
+            if touchConnections[character] then
+                touchConnections[character]:Disconnect()
+                touchConnections[character] = nil
+            end
+        end
+    end)
+end
+
+-- Function to disable bounce (Based on DaraHub code)
+local function disableBounce()
+    for character, connection in pairs(touchConnections) do
+        if connection then
+            connection:Disconnect()
+            touchConnections[character] = nil
+        end
+    end
+end
 
 -- Required Fields for Config Tables (Preserved from previous script)
 local requiredFields = {
@@ -158,48 +231,6 @@ local function makeDraggable(frame)
     frame.Draggable = true
     local dragDetector = Instance.new("UIDragDetector")
     dragDetector.Parent = frame
-end
-
--- Bounce Feature Variables (Preserved from previous script)
-local BOUNCE_ENABLED = false
-local BOUNCE_HEIGHT = 50
-local BOUNCE_EPSILON = 0.1
-local touchConnections = {}
-
--- Function to setup bounce on touch for a character (Preserved from previous script)
-local function setupBounceOnTouch(char)
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    local humanoidRootPart = char.HumanoidRootPart
-    local touchConnection = humanoidRootPart.Touched:Connect(function(hit)
-        if not BOUNCE_ENABLED or not hit or hit.Parent == char then return end
-        local magnitude = (hit.Position - humanoidRootPart.Position).Magnitude
-        if magnitude < BOUNCE_EPSILON then
-            local bodyVel = Instance.new("BodyVelocity")
-            bodyVel.MaxForce = Vector3.new(4000, 4000, 4000)
-            bodyVel.Velocity = Vector3.new(0, BOUNCE_HEIGHT, 0)
-            bodyVel.Parent = humanoidRootPart
-            game:GetService("Debris"):AddItem(bodyVel, 0.2)
-        end
-    end)
-    touchConnections[char] = touchConnection
-    char.AncestryChanged:Connect(function()
-        if not char.Parent then
-            if touchConnections[char] then
-                touchConnections[char]:Disconnect()
-                touchConnections[char] = nil
-            end
-        end
-    end)
-end
-
--- Function to disable bounce (Preserved from previous script)
-local function disableBounce()
-    for character, connection in pairs(touchConnections) do
-        if connection then
-            connection:Disconnect()
-            touchConnections[character] = nil
-        end
-    end
 end
 
 -- Bhop Feature Variables & Logic (Preserved from previous script)
@@ -592,12 +623,18 @@ local AutoCrouchModeDropdown = Tabs.Player:Dropdown({
     end
 })
 
-local BounceToggle = Tabs.Player:Toggle({
+-- Bounce Section and Components (Based on DaraHub structure)
+Tabs.Player:Section({ Title = "Bounce Settings", TextSize = 20 })
+
+local BounceToggle
+local BounceHeightInput
+local EpsilonInput
+
+BounceToggle = Tabs.Player:Toggle({
     Title = "Enable Bounce",
-    Value = BOUNCE_ENABLED,
+    Value = BOUNCE_ENABLED, -- Use the global variable
     Callback = function(state)
-        BOUNCE_ENABLED = state
-        featureStates.Bounce = state -- Update feature state
+        BOUNCE_ENABLED = state -- Update the global variable
         if state then
             if player.Character then
                 setupBounceOnTouch(player.Character)
@@ -605,8 +642,40 @@ local BounceToggle = Tabs.Player:Toggle({
         else
             disableBounce()
         end
+        -- Enable/Disable related inputs based on toggle state
+        BounceHeightInput:Set({ Enabled = state })
+        EpsilonInput:Set({ Enabled = state })
     end
 })
+
+BounceHeightInput = Tabs.Player:Input({
+    Title = "Bounce Height",
+    Placeholder = "0",
+    Value = tostring(BOUNCE_HEIGHT), -- Use the global variable
+    NumbersOnly = true, -- WindUI equivalent of Numeric
+    Enabled = false, -- Initially disabled, enabled by toggle
+    Callback = function(value)
+        local num = tonumber(value)
+        if num then
+            BOUNCE_HEIGHT = math.max(0, num) -- Ensure non-negative value
+        end
+    end
+})
+
+EpsilonInput = Tabs.Player:Input({
+    Title = "Touch Detection Epsilon",
+    Placeholder = "0.1",
+    Value = tostring(BOUNCE_EPSILON), -- Use the global variable
+    NumbersOnly = true, -- WindUI equivalent of Numeric
+    Enabled = false, -- Initially disabled, enabled by toggle
+    Callback = function(value)
+        local num = tonumber(value)
+        if num then
+            BOUNCE_EPSILON = math.max(0, num) -- Ensure non-negative value
+        end
+    end
+})
+
 
 -- Settings Tab Content (Like DaraHub)
 Tabs.Settings:Section({ Title = "Main Settings", TextSize = 20 })
@@ -701,7 +770,9 @@ configFile:Register("AutoCarryToggle", AutoCarryToggle)
 configFile:Register("GravityToggle", GravityToggle)
 configFile:Register("GravityInput", GravityInput)
 configFile:Register("AutoCrouchToggle", AutoCrouchToggle)
-configFile:Register("BounceToggle", BounceToggle)
+configFile:Register("BounceToggle", BounceToggle) -- Register Bounce toggle
+configFile:Register("BounceHeightInput", BounceHeightInput) -- Register Bounce height input
+configFile:Register("EpsilonInput", EpsilonInput) -- Register Epsilon input
 configFile:Register("BhopGUIToggle", BhopGUIToggle)
 configFile:Register("AutoCarryGUIToggle", AutoCarryGUIToggle)
 configFile:Register("GravityGUIToggle", GravityGUIToggle)
@@ -713,6 +784,16 @@ configFile:Register("ButtonSizeYInput", ButtonSizeYInput)
 -- Load settings after registering, then apply them
 configFile:Load()
 applyStoredSettings() -- Apply loaded settings to the game
+
+-- Update global variables after loading config
+-- The callbacks for BounceHeightInput and EpsilonInput already update the global vars
+-- The BounceToggle callback updates BOUNCE_ENABLED and handles setup/disable
+-- So, the initial state should be correct after Load() and applyStoredSettings()
+
+-- If Bounce was enabled in the config, ensure it's set up
+if BOUNCE_ENABLED and player.Character then
+    setupBounceOnTouch(player.Character)
+end
 
 -- Add a save button if needed (optional)
 -- Tabs.Settings:Button({Title = "Save Config", Callback = function() configFile:Save() end})
