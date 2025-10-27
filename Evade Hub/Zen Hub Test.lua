@@ -59,11 +59,12 @@ local featureStates = {
     AutoCrouchMode = "Air",
     -- Bounce state is now handled by the toggle itself
     TimerDisplay = false, -- Add state for Timer Display
+    BhopHold = false, -- Add state for Bhop Hold mode
 }
 
--- Bhop Variables (Based on DaraHub code)
+-- Bhop Variables (Based on Evade Test.txt)
 getgenv().bhopMode = getgenv().bhopMode or "Acceleration"
-getgenv().bhopAccelValue = getgenv().bhopAccelValue or -0.1
+getgenv().bhopAccelValue = getgenv().bhopAccelValue or -0.5
 getgenv().bhopHoldActive = false -- This is for holding a key to bhop, not the main toggle
 
 -- Other Variables (Preserved from previous script)
@@ -240,85 +241,77 @@ local function makeDraggable(frame)
     dragDetector.Parent = frame
 end
 
--- Bhop Feature Variables & Logic (Updated for Mode and Accel Input)
+-- Bhop Feature Variables & Logic (Updated based on Evade Test.txt - Less Laggy Version)
 local bhopConnection = nil
 local bhopLoaded = false
-local bhopKeyConnection = nil
 
+-- New updateBhop function based on Evade Test.txt (runs less frequently)
 local function updateBhop()
-    if not player.Character or not player.Character:FindFirstChild("Humanoid") then return end
-    local humanoid = player.Character.Humanoid
-    local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive -- Check both main toggle and hold toggle
+    while true do -- Loop indefinitely
+        local friction = 5 -- Default friction value
+        local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive -- Check both main toggle and hold toggle
 
-    if isBhopActive and getgenv().bhopMode == "Acceleration" then
-        local friction = getgenv().bhopAccelValue or -0.1 -- Use the input value
-        for _, t in pairs(getgc(true)) do
-            if type(t) == "table" and rawget(t, "Friction") then
-                t.Friction = friction
+        if isBhopActive and getgenv().bhopMode == "Acceleration" then
+            friction = getgenv().bhopAccelValue or -0.5 -- Use the input value when Acceleration mode is active
+        end
+
+        -- Apply friction change if main toggle is off (reset) or if mode is No Accel (reset) while active
+        if not getgenv().autoJumpEnabled then
+            friction = 5 -- Always reset if main toggle is off
+        else
+            if getgenv().bhopMode == "No Acceleration" then
+                friction = 5 -- Reset friction if No Acceleration mode is active
             end
         end
-    elseif isBhopActive and getgenv().bhopMode == "No Acceleration" then
-        -- Set friction to a different value or leave as default, depending on desired "No Accel" behavior
-        -- For now, setting to default friction when mode is No Accel, but only if it's active
+
+        -- Iterate through tables and modify Friction
         for _, t in pairs(getgc(true)) do
             if type(t) == "table" and rawget(t, "Friction") then
-                t.Friction = 5 -- Default friction for "No Acceleration" mode
+                if getgenv().bhopMode == "No Acceleration" then
+                    -- If No Acceleration mode, always reset friction
+                    t.Friction = 5
+                else
+                    -- Otherwise, apply the calculated friction (either default or from accel input)
+                    t.Friction = friction
+                end
             end
         end
-    elseif not isBhopActive then
-        -- Reset friction to default if bhop is not active
-        for _, t in pairs(getgc(true)) do
-            if type(t) == "table" and rawget(t, "Friction") then
-                t.Friction = 5
+
+        task.wait(0.15) -- Wait for 0.15 seconds before the next cycle (less frequent than Heartbeat)
+    end
+end
+
+-- Function to setup mobile jump button for Bhop Hold (Based on Evade Test.txt)
+local function setupJumpButton()
+    local success, err = pcall(function()
+        local touchGui = player:WaitForChild("PlayerGui"):WaitForChild("TouchGui", 5)
+        if not touchGui then return end
+        local touchControlFrame = touchGui:WaitForChild("TouchControlFrame", 5)
+        if not touchControlFrame then return end
+        local jumpButton = touchControlFrame:WaitForChild("JumpButton", 5)
+        if not jumpButton then return end
+
+        jumpButton.MouseButton1Down:Connect(function()
+            if featureStates.BhopHold then -- Use featureStates variable
+                getgenv().bhopHoldActive = true
             end
-        end
-        -- Ensure hold state is false when main toggle is off
-        getgenv().bhopHoldActive = false
-    end
+        end)
 
-    -- Trigger jump if bhop is active and not already jumping
-    if isBhopActive and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping and humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
-        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end
-
-local function loadBhop()
-    if bhopLoaded then return end
-    bhopLoaded = true
-    if bhopConnection then bhopConnection:Disconnect() end
-    bhopConnection = RunService.Heartbeat:Connect(updateBhop)
-end
-
-local function unloadBhop()
-    if not bhopLoaded then return end
-    bhopLoaded = false
-    if bhopConnection then
-        bhopConnection:Disconnect()
-        bhopConnection = nil
-    end
-    -- Reset friction when unloading
-    for _, t in pairs(getgc(true)) do
-        if type(t) == "table" and rawget(t, "Friction") then
-            t.Friction = 5
-        end
-    end
-    getgenv().bhopHoldActive = false -- Reset hold state
-end
-
-local function checkBhopState()
-    local shouldLoad = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
-    if shouldLoad and not bhopLoaded then
-        loadBhop()
-    elseif not shouldLoad and bhopLoaded then
-        unloadBhop()
+        jumpButton.MouseButton1Up:Connect(function()
+            getgenv().bhopHoldActive = false
+        end)
+    end)
+    if not success then
+        warn("Failed to setup jump button: " .. tostring(err))
     end
 end
 
+-- Function to setup Bhop keybind for GUI toggle (only affects main toggle state)
 local function setupBhopKeybind()
     if bhopKeyConnection then bhopKeyConnection:Disconnect() end
     bhopKeyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
         if gameProcessedEvent then return end
-        -- Use a specific key (e.g., L) to toggle bhop hold state, but only if GUI toggle is enabled
+        -- Use a specific key (e.g., L) to toggle bhop main state, but only if GUI toggle is enabled
         if input.KeyCode == Enum.KeyCode.L and getgenv().bhopGuiVisible then
             getgenv().autoJumpEnabled = not getgenv().autoJumpEnabled -- Toggle the main state
             featureStates.Bhop = getgenv().autoJumpEnabled -- Update feature state
@@ -326,10 +319,11 @@ local function setupBhopKeybind()
                 bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
                 bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
             end
-            checkBhopState() -- Check if we need to load/unload bhop logic
+            -- No need to explicitly load/unload as updateBhop handles it
         end
     end)
 end
+
 
 -- AutoCarry Feature Logic (Preserved from previous script)
 local AutoCarryConnection = nil
@@ -493,7 +487,7 @@ local function createBhopGui(yOffset)
         featureStates.Bhop = getgenv().autoJumpEnabled
         bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
         bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
-        checkBhopState()
+        -- No need to explicitly load/unload as updateBhop handles it
     end)
 
     return bhopGui, bhopGuiButton
@@ -776,7 +770,7 @@ local BhopToggle = Tabs.Player:Toggle({
             bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
             bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
         end
-        checkBhopState() -- Check if we need to load/unload bhop logic
+        -- No need to explicitly load/unload as updateBhop handles it
     end
 })
 
@@ -811,12 +805,7 @@ local BhopModeDropdown = Tabs.Player:Dropdown({
     Value = getgenv().bhopMode, -- Use the global variable
     Callback = function(value)
         getgenv().bhopMode = value -- Update the global variable
-        -- The updateBhop function will handle the mode change on the next heartbeat
-        -- If bhop is currently active, reload the logic to apply the new mode immediately
-        if getgenv().autoJumpEnabled or getgenv().bhopHoldActive then
-             unloadBhop()
-             loadBhop()
-        end
+        -- The updateBhop function will handle the mode change on the next iteration
     end
 })
 
@@ -830,6 +819,18 @@ local BhopAccelInput = Tabs.Player:Input({
         local val = tonumber(input)
         if val and val < 0 then -- Ensure value is a number and negative
             getgenv().bhopAccelValue = val -- Update the global variable
+        end
+    end
+})
+
+-- Bhop Hold Toggle (Based on Evade Test.txt)
+local BhopHoldToggle = Tabs.Player:Toggle({
+    Title = "Bhop (Hold Space/Jump)",
+    Value = featureStates.BhopHold,
+    Callback = function(state)
+        featureStates.BhopHold = state
+        if not state then
+            getgenv().bhopHoldActive = false -- Ensure hold state is false if toggle is turned off
         end
     end
 })
@@ -1031,6 +1032,7 @@ EpsilonInput = Tabs.Player:Input({
     end
 })
 
+
 -- Visuals Tab Content
 Tabs.Visuals:Section({ Title = "Visual", TextSize = 20 }) -- Section for visual settings
 
@@ -1047,7 +1049,7 @@ local TimerDisplayToggle = Tabs.Visuals:Toggle({
             local hud = shared and shared:FindFirstChild("HUD")
             local overlay = hud and hud:FindFirstChild("Overlay")
             if not overlay then return nil end -- Return nil if overlay doesn't exist
-            local default = overlay:FindFirstChild("Default")
+            local default = overlay and overlay:FindFirstChild("Default")
             local ro = default and default:FindFirstChild("RoundOverlay")
             local round = ro and ro:FindFirstChild("Round")
             return round and round:FindFirstChild("RoundTimer") -- Return the timer label or nil
@@ -1152,12 +1154,14 @@ player.CharacterAdded:Connect(function(char)
     if getgenv().bhopGuiVisible then
         setupBhopKeybind() -- Re-setup keybinds when character respawns
     end
+    -- Setup mobile jump button when character respawns
+    setupJumpButton()
     -- Optionally re-apply stored settings here too if needed after respawn
     -- applyStoredSettings()
 end)
 
--- Initialize Bhop if it was enabled before
-checkBhopState()
+-- Start the new Bhop update loop
+task.spawn(updateBhop)
 
 -- --- Save/Load Logic (DaraHub Style) ---
 local configFile = Window:ConfigFile("MovementHubConfig") -- Create config file handler
@@ -1170,6 +1174,7 @@ configFile:Register("ApplyMethodDropdown", ApplyMethodDropdown)
 configFile:Register("BhopToggle", BhopToggle)
 configFile:Register("BhopModeDropdown", BhopModeDropdown) -- Register Bhop Mode Dropdown
 configFile:Register("BhopAccelInput", BhopAccelInput) -- Register Bhop Accel Input
+configFile:Register("BhopHoldToggle", BhopHoldToggle) -- Register Bhop Hold Toggle
 configFile:Register("AutoCarryToggle", AutoCarryToggle)
 configFile:Register("GravityToggle", GravityToggle)
 configFile:Register("GravityInput", GravityInput)
@@ -1210,7 +1215,14 @@ if featureStates.TimerDisplay then
     TimerDisplayToggle:Set(currentTimerState) -- Then set it back via the toggle
 end
 
+-- Execute the additional loadstring after everything else is set up
+local success, err = pcall(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
+end)
+
+if not success then
+    warn("Error executing additional loadstring: ", err)
+end
+
 -- Add a save button if needed (optional)
 -- Tabs.Settings:Button({Title = "Save Config", Callback = function() configFile:Save() end})
-
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
