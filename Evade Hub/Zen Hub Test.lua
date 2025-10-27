@@ -1154,3 +1154,5 @@ end
 
 -- Add a save button if needed (optional)
 -- Tabs.Settings:Button({Title = "Save Config", Callback = function() configFile:Save() end})
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
