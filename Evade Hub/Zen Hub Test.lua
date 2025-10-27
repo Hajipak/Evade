@@ -58,6 +58,7 @@ local featureStates = {
     GravityValue = workspace.Gravity,
     AutoCrouchMode = "Air",
     -- Bounce state is now handled by the toggle itself
+    TimerDisplay = false, -- Add state for Timer Display
 }
 
 -- Bhop Variables (Based on DaraHub code)
@@ -702,6 +703,7 @@ local FeatureSection = Window:Section({ Title = "Features", Opened = true })
 
 local Tabs = {
     Player = FeatureSection:Tab({ Title = "Movement Hub", Icon = "motion" }), -- Renamed Tab
+    Visuals = FeatureSection:Tab({ Title = "Visuals", Icon = "eye" }), -- New Visuals Tab
     Settings = FeatureSection:Tab({ Title = "Settings", Icon = "settings" }) -- Added Settings Tab like DaraHub
 }
 
@@ -1029,6 +1031,53 @@ EpsilonInput = Tabs.Player:Input({
     end
 })
 
+-- Visuals Tab Content
+Tabs.Visuals:Section({ Title = "Visual", TextSize = 20 }) -- Section for visual settings
+
+local TimerDisplayToggle = Tabs.Visuals:Toggle({
+    Title = "Timer Display",
+    Value = featureStates.TimerDisplay,
+    Callback = function(state)
+        featureStates.TimerDisplay = state
+
+        local function getRoundTimer()
+            local player = game:GetService("Players").LocalPlayer
+            local pg = player.PlayerGui
+            local shared = pg:FindFirstChild("Shared")
+            local hud = shared and shared:FindFirstChild("HUD")
+            local overlay = hud and hud:FindFirstChild("Overlay")
+            if not overlay then return nil end -- Return nil if overlay doesn't exist
+            local default = overlay:FindFirstChild("Default")
+            local ro = default and default:FindFirstChild("RoundOverlay")
+            local round = ro and ro:FindFirstChild("Round")
+            return round and round:FindFirstChild("RoundTimer") -- Return the timer label or nil
+        end
+
+        local function setContainerVisible(visible)
+            local pg = game:GetService("Players").LocalPlayer.PlayerGui
+            local main = pg:FindFirstChild("MainInterface")
+            if main then
+                local container = main:FindFirstChild("TimerContainer") -- Find the TimerContainer
+                if container then
+                    container.Visible = visible -- Set its visibility
+                end
+            end
+        end
+
+        if state then
+            -- Show the timer and container if toggle is on
+            setContainerVisible(true)
+            -- Optional: Continuously check if timer becomes invisible and re-show container
+            -- This might be needed if the game hides the timer but the container remains visible
+            -- A simple loop could be added here, but be cautious of performance.
+            -- For now, just show it once when enabled.
+        else
+            -- Hide the container if toggle is off
+            setContainerVisible(false)
+        end
+    end
+})
+
 
 -- Settings Tab Content (Like DaraHub)
 Tabs.Settings:Section({ Title = "Main Settings", TextSize = 20 })
@@ -1128,6 +1177,7 @@ configFile:Register("AutoCrouchToggle", AutoCrouchToggle)
 configFile:Register("BounceToggle", BounceToggle) -- Register Bounce toggle
 configFile:Register("BounceHeightInput", BounceHeightInput) -- Register Bounce height input
 configFile:Register("EpsilonInput", EpsilonInput) -- Register Epsilon input
+configFile:Register("TimerDisplayToggle", TimerDisplayToggle) -- Register Timer Display Toggle
 configFile:Register("BhopGUIToggle", BhopGUIToggle)
 configFile:Register("AutoCarryGUIToggle", AutoCarryGUIToggle)
 configFile:Register("GravityGUIToggle", GravityGUIToggle)
@@ -1150,6 +1200,14 @@ applyStoredSettings() -- Apply loaded settings to the game
 -- If Bounce was enabled in the config, ensure it's set up
 if BOUNCE_ENABLED and player.Character then
     setupBounceOnTouch(player.Character)
+end
+
+-- Apply Timer Display state after loading config
+if featureStates.TimerDisplay then
+    -- Trigger the callback logic to show the timer
+    local currentTimerState = featureStates.TimerDisplay
+    featureStates.TimerDisplay = not currentTimerState -- Temporarily flip state
+    TimerDisplayToggle:Set(currentTimerState) -- Then set it back via the toggle
 end
 
 -- Add a save button if needed (optional)
