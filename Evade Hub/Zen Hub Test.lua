@@ -241,39 +241,28 @@ local function makeDraggable(frame)
     dragDetector.Parent = frame
 end
 
--- Bhop Feature Variables & Logic (Updated based on Evade Test.txt - Less Laggy Version)
+-- Bhop Feature Variables & Logic (Updated based on Evade Test.txt - Less Laggy Version - CORRECTED)
 local bhopConnection = nil
 local bhopLoaded = false
 
--- New updateBhop function based on Evade Test.txt (runs less frequently)
+-- New updateBhop function based on Evade Test.txt (runs less frequently) - CORRECTED LOGIC
 local function updateBhop()
     while true do -- Loop indefinitely
         local friction = 5 -- Default friction value
         local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive -- Check both main toggle and hold toggle
 
+        -- Apply friction based on combined state and mode
         if isBhopActive and getgenv().bhopMode == "Acceleration" then
-            friction = getgenv().bhopAccelValue or -0.5 -- Use the input value when Acceleration mode is active
-        end
-
-        -- Apply friction change if main toggle is off (reset) or if mode is No Accel (reset) while active
-        if not getgenv().autoJumpEnabled then
-            friction = 5 -- Always reset if main toggle is off
-        else
-            if getgenv().bhopMode == "No Acceleration" then
-                friction = 5 -- Reset friction if No Acceleration mode is active
-            end
+            friction = getgenv().bhopAccelValue or -0.5 -- Use the input value when Acceleration mode is active and bhop is on
+        elseif isBhopActive and getgenv().bhopMode == "No Acceleration" then
+            friction = 5 -- Use default friction when No Accel mode is active and bhop is on
+        -- If neither main toggle nor hold is active, friction remains 5 (default)
         end
 
         -- Iterate through tables and modify Friction
         for _, t in pairs(getgc(true)) do
             if type(t) == "table" and rawget(t, "Friction") then
-                if getgenv().bhopMode == "No Acceleration" then
-                    -- If No Acceleration mode, always reset friction
-                    t.Friction = 5
-                else
-                    -- Otherwise, apply the calculated friction (either default or from accel input)
-                    t.Friction = friction
-                end
+                t.Friction = friction -- Apply the calculated friction value
             end
         end
 
