@@ -60,6 +60,12 @@ local featureStates = {
     -- Bounce state is now handled by the toggle itself
 }
 
+-- Bhop Variables (Based on DaraHub code)
+getgenv().bhopMode = getgenv().bhopMode or "Acceleration"
+getgenv().bhopAccelValue = getgenv().bhopAccelValue or -0.1
+getgenv().bhopHoldActive = false -- This is for holding a key to bhop, not the main toggle
+
+-- Other Variables (Preserved from previous script)
 local originalGameGravity = workspace.Gravity
 
 -- GUI Variables
@@ -233,11 +239,7 @@ local function makeDraggable(frame)
     dragDetector.Parent = frame
 end
 
--- Bhop Feature Variables & Logic (Preserved from previous script)
-getgenv().autoJumpEnabled = getgenv().autoJumpEnabled or false
-getgenv().bhopMode = getgenv().bhopMode or "Acceleration"
-getgenv().bhopAccelValue = getgenv().bhopAccelValue or -0.1
-getgenv().bhopHoldActive = false
+-- Bhop Feature Variables & Logic (Updated for Mode and Accel Input)
 local bhopConnection = nil
 local bhopLoaded = false
 local bhopKeyConnection = nil
@@ -245,21 +247,35 @@ local bhopKeyConnection = nil
 local function updateBhop()
     if not player.Character or not player.Character:FindFirstChild("Humanoid") then return end
     local humanoid = player.Character.Humanoid
-    local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
+    local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive -- Check both main toggle and hold toggle
+
     if isBhopActive and getgenv().bhopMode == "Acceleration" then
-        local friction = getgenv().bhopAccelValue or -0.1
+        local friction = getgenv().bhopAccelValue or -0.1 -- Use the input value
         for _, t in pairs(getgc(true)) do
             if type(t) == "table" and rawget(t, "Friction") then
                 t.Friction = friction
             end
         end
-    elseif not isBhopActive then
+    elseif isBhopActive and getgenv().bhopMode == "No Acceleration" then
+        -- Set friction to a different value or leave as default, depending on desired "No Accel" behavior
+        -- For now, setting to default friction when mode is No Accel, but only if it's active
         for _, t in pairs(getgc(true)) do
             if type(t) == "table" and rawget(t, "Friction") then
-                t.Friction = 5 -- Default friction
+                t.Friction = 5 -- Default friction for "No Acceleration" mode
             end
         end
+    elseif not isBhopActive then
+        -- Reset friction to default if bhop is not active
+        for _, t in pairs(getgc(true)) do
+            if type(t) == "table" and rawget(t, "Friction") then
+                t.Friction = 5
+            end
+        end
+        -- Ensure hold state is false when main toggle is off
+        getgenv().bhopHoldActive = false
     end
+
+    -- Trigger jump if bhop is active and not already jumping
     if isBhopActive and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping and humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
         humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
     end
@@ -279,12 +295,13 @@ local function unloadBhop()
         bhopConnection:Disconnect()
         bhopConnection = nil
     end
+    -- Reset friction when unloading
     for _, t in pairs(getgc(true)) do
         if type(t) == "table" and rawget(t, "Friction") then
             t.Friction = 5
         end
     end
-    getgenv().bhopHoldActive = false
+    getgenv().bhopHoldActive = false -- Reset hold state
 end
 
 local function checkBhopState()
@@ -300,14 +317,15 @@ local function setupBhopKeybind()
     if bhopKeyConnection then bhopKeyConnection:Disconnect() end
     bhopKeyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
         if gameProcessedEvent then return end
-        if input.KeyCode == Enum.KeyCode.B and getgenv().bhopGuiVisible then
-            getgenv().autoJumpEnabled = not getgenv().autoJumpEnabled
-            featureStates.Bhop = getgenv().autoJumpEnabled
-            if bhopGuiButton then
+        -- Use a specific key (e.g., L) to toggle bhop hold state, but only if GUI toggle is enabled
+        if input.KeyCode == Enum.KeyCode.L and getgenv().bhopGuiVisible then
+            getgenv().autoJumpEnabled = not getgenv().autoJumpEnabled -- Toggle the main state
+            featureStates.Bhop = getgenv().autoJumpEnabled -- Update feature state
+            if bhopGuiButton then -- Update the GUI button if it exists
                 bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
                 bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
             end
-            checkBhopState()
+            checkBhopState() -- Check if we need to load/unload bhop logic
         end
     end)
 end
@@ -416,6 +434,269 @@ local function stopAutoCrouch()
     end
 end
 
+-- --- Create GUI Button Functions (Based on DaraHub style) ---
+local function createBhopGui(yOffset)
+    -- Destroy old GUI if it exists
+    local bhopGuiOld = playerGui:FindFirstChild("BhopGui")
+    if bhopGuiOld then bhopGuiOld:Destroy() end
+
+    bhopGui = Instance.new("ScreenGui")
+    bhopGui.Name = "BhopGui"
+    bhopGui.IgnoreGuiInset = true
+    bhopGui.ResetOnSpawn = false
+    bhopGui.Enabled = getgenv().bhopGuiVisible -- Controlled by visibility state
+    bhopGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) -- Use dynamic size
+    frame.Position = UDim2.new(0.5, -getgenv().guiButtonSizeX/2, 0.12 + (yOffset or 0), 0) -- Centered X
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.35
+    frame.BorderSizePixel = 0
+    frame.Parent = bhopGui
+
+    makeDraggable(frame)
+
+    local label = Instance.new("TextLabel")
+    label.Text = "Bhop"
+    label.Size = UDim2.new(0.9, 0, 0.3, 0)
+    label.Position = UDim2.new(0.05, 0, 0.05, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Roboto
+    label.TextSize = 20
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextScaled = true
+    label.Parent = frame
+
+    bhopGuiButton = Instance.new("TextButton")
+    bhopGuiButton.Name = "ToggleButton"
+    bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
+    bhopGuiButton.Size = UDim2.new(0.9, 0, 0.5, 0)
+    bhopGuiButton.Position = UDim2.new(0.05, 0, 0.5, 0)
+    bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    bhopGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    bhopGuiButton.Font = Enum.Font.Roboto
+    bhopGuiButton.TextSize = 14
+    bhopGuiButton.TextXAlignment = Enum.TextXAlignment.Center
+    bhopGuiButton.TextYAlignment = Enum.TextYAlignment.Center
+    bhopGuiButton.Parent = frame
+
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 4)
+    buttonCorner.Parent = bhopGuiButton
+
+    bhopGuiButton.MouseButton1Click:Connect(function()
+        getgenv().autoJumpEnabled = not getgenv().autoJumpEnabled
+        featureStates.Bhop = getgenv().autoJumpEnabled
+        bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
+        bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+        checkBhopState()
+    end)
+
+    return bhopGui, bhopGuiButton
+end
+
+local function createAutoCarryGui(yOffset)
+    -- Destroy old GUI if it exists
+    local autoCarryGuiOld = playerGui:FindFirstChild("AutoCarryGui")
+    if autoCarryGuiOld then autoCarryGuiOld:Destroy() end
+
+    autoCarryGui = Instance.new("ScreenGui")
+    autoCarryGui.Name = "AutoCarryGui"
+    autoCarryGui.IgnoreGuiInset = true
+    autoCarryGui.ResetOnSpawn = false
+    autoCarryGui.Enabled = getgenv().autoCarryGuiVisible -- Controlled by visibility state
+    autoCarryGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) -- Use dynamic size
+    frame.Position = UDim2.new(0.5, -getgenv().guiButtonSizeX/2, 0.12 + (yOffset or 0), 0) -- Centered X
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.35
+    frame.BorderSizePixel = 0
+    frame.Parent = autoCarryGui
+
+    makeDraggable(frame)
+
+    local label = Instance.new("TextLabel")
+    label.Text = "Carry"
+    label.Size = UDim2.new(0.9, 0, 0.3, 0)
+    label.Position = UDim2.new(0.05, 0, 0.05, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Roboto
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextScaled = true
+    label.Parent = frame
+
+    autoCarryGuiButton = Instance.new("TextButton")
+    autoCarryGuiButton.Name = "ToggleButton"
+    autoCarryGuiButton.Text = featureStates.AutoCarry and "On" or "Off"
+    autoCarryGuiButton.Size = UDim2.new(0.9, 0, 0.5, 0)
+    autoCarryGuiButton.Position = UDim2.new(0.05, 0, 0.5, 0)
+    autoCarryGuiButton.BackgroundColor3 = featureStates.AutoCarry and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    autoCarryGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    autoCarryGuiButton.Font = Enum.Font.Roboto
+    autoCarryGuiButton.TextSize = 14
+    autoCarryGuiButton.TextXAlignment = Enum.TextXAlignment.Center
+    autoCarryGuiButton.TextYAlignment = Enum.TextYAlignment.Center
+    autoCarryGuiButton.Parent = frame
+
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 4)
+    buttonCorner.Parent = autoCarryGuiButton
+
+    autoCarryGuiButton.MouseButton1Click:Connect(function()
+        featureStates.AutoCarry = not featureStates.AutoCarry
+        if featureStates.AutoCarry then
+            startAutoCarry()
+        else
+            stopAutoCarry()
+        end
+        autoCarryGuiButton.Text = featureStates.AutoCarry and "On" or "Off"
+        autoCarryGuiButton.BackgroundColor3 = featureStates.AutoCarry and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    end)
+
+    return autoCarryGui, autoCarryGuiButton
+end
+
+local function createGravityGui(yOffset)
+    -- Destroy old GUI if it exists
+    local gravityGuiOld = playerGui:FindFirstChild("GravityGui")
+    if gravityGuiOld then gravityGuiOld:Destroy() end
+
+    gravityGui = Instance.new("ScreenGui")
+    gravityGui.Name = "GravityGui"
+    gravityGui.IgnoreGuiInset = true
+    gravityGui.ResetOnSpawn = false
+    gravityGui.Enabled = getgenv().gravityGuiVisible -- Controlled by visibility state
+    gravityGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) -- Use dynamic size
+    frame.Position = UDim2.new(0.5, -getgenv().guiButtonSizeX/2, 0.12 + (yOffset or 0), 0) -- Centered X
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.35
+    frame.BorderSizePixel = 0
+    frame.Parent = gravityGui
+
+    makeDraggable(frame)
+
+    local label = Instance.new("TextLabel")
+    label.Text = "Gravity"
+    label.Size = UDim2.new(0.9, 0, 0.3, 0)
+    label.Position = UDim2.new(0.05, 0, 0.05, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Roboto
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextScaled = true
+    label.Parent = frame
+
+    gravityGuiButton = Instance.new("TextButton")
+    gravityGuiButton.Name = "ToggleButton"
+    gravityGuiButton.Text = featureStates.CustomGravity and "On" or "Off"
+    gravityGuiButton.Size = UDim2.new(0.9, 0, 0.5, 0)
+    gravityGuiButton.Position = UDim2.new(0.05, 0, 0.5, 0)
+    gravityGuiButton.BackgroundColor3 = featureStates.CustomGravity and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    gravityGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    gravityGuiButton.Font = Enum.Font.Roboto
+    gravityGuiButton.TextSize = 14
+    gravityGuiButton.TextXAlignment = Enum.TextXAlignment.Center
+    gravityGuiButton.TextYAlignment = Enum.TextYAlignment.Center
+    gravityGuiButton.Parent = frame
+
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 4)
+    buttonCorner.Parent = gravityGuiButton
+
+    gravityGuiButton.MouseButton1Click:Connect(function()
+        featureStates.CustomGravity = not featureStates.CustomGravity
+        if featureStates.CustomGravity then
+            workspace.Gravity = featureStates.GravityValue
+        else
+            workspace.Gravity = originalGameGravity
+        end
+        gravityGuiButton.Text = featureStates.CustomGravity and "On" or "Off"
+        gravityGuiButton.BackgroundColor3 = featureStates.CustomGravity and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    end)
+
+    return gravityGui, gravityGuiButton
+end
+
+local function createAutoCrouchGui(yOffset)
+    -- Destroy old GUI if it exists
+    local autoCrouchGuiOld = playerGui:FindFirstChild("AutoCrouchGui")
+    if autoCrouchGuiOld then autoCrouchGuiOld:Destroy() end
+
+    autoCrouchGui = Instance.new("ScreenGui")
+    autoCrouchGui.Name = "AutoCrouchGui"
+    autoCrouchGui.IgnoreGuiInset = true
+    autoCrouchGui.ResetOnSpawn = false
+    autoCrouchGui.Enabled = getgenv().autoCrouchGuiVisible -- Controlled by visibility state
+    autoCrouchGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) -- Use dynamic size
+    frame.Position = UDim2.new(0.5, -getgenv().guiButtonSizeX/2, 0.12 + (yOffset or 0), 0) -- Centered X
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.35
+    frame.BorderSizePixel = 0
+    frame.Parent = autoCrouchGui
+
+    makeDraggable(frame)
+
+    local label = Instance.new("TextLabel")
+    label.Text = "Crouch"
+    label.Size = UDim2.new(0.9, 0, 0.3, 0)
+    label.Position = UDim2.new(0.05, 0, 0.05, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Roboto
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextScaled = true
+    label.Parent = frame
+
+    autoCrouchGuiButton = Instance.new("TextButton")
+    autoCrouchGuiButton.Name = "ToggleButton"
+    autoCrouchGuiButton.Text = featureStates.AutoCrouch and "On" or "Off"
+    autoCrouchGuiButton.Size = UDim2.new(0.9, 0, 0.5, 0)
+    autoCrouchGuiButton.Position = UDim2.new(0.05, 0, 0.5, 0)
+    autoCrouchGuiButton.BackgroundColor3 = featureStates.AutoCrouch and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    autoCrouchGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    autoCrouchGuiButton.Font = Enum.Font.Roboto
+    autoCrouchGuiButton.TextSize = 14
+    autoCrouchGuiButton.TextXAlignment = Enum.TextXAlignment.Center
+    autoCrouchGuiButton.TextYAlignment = Enum.TextYAlignment.Center
+    autoCrouchGuiButton.Parent = frame
+
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 4)
+    buttonCorner.Parent = autoCrouchGuiButton
+
+    autoCrouchGuiButton.MouseButton1Click:Connect(function()
+        featureStates.AutoCrouch = not featureStates.AutoCrouch
+        if featureStates.AutoCrouch then
+            startAutoCrouch()
+        else
+            stopAutoCrouch()
+        end
+        autoCrouchGuiButton.Text = featureStates.AutoCrouch and "On" or "Off"
+        autoCrouchGuiButton.BackgroundColor3 = featureStates.AutoCrouch and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    end)
+
+    return autoCrouchGui, autoCrouchGuiButton
+end
+
+
 -- --- UI Creation (Using WindUI structure like DaraHub) ---
 local FeatureSection = Window:Section({ Title = "Features", Opened = true })
 
@@ -488,12 +769,12 @@ local BhopToggle = Tabs.Player:Toggle({
     Value = featureStates.Bhop,
     Callback = function(state)
         featureStates.Bhop = state
-        getgenv().autoJumpEnabled = state
+        getgenv().autoJumpEnabled = state -- Link toggle state to the main bhop variable
         if bhopGuiButton then
             bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
             bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
         end
-        checkBhopState()
+        checkBhopState() -- Check if we need to load/unload bhop logic
     end
 })
 
@@ -502,10 +783,52 @@ local BhopGUIToggle = Tabs.Player:Toggle({
     Value = getgenv().bhopGuiVisible,
     Callback = function(state)
         getgenv().bhopGuiVisible = state
-        if bhopGui then
-            bhopGui.Enabled = state
+        if state then
+            -- Create the GUI if it doesn't exist and enable it
+            if not bhopGui then
+                createBhopGui(0) -- Pass the initial Y offset
+                setupBhopKeybind() -- Ensure keybind is active if GUI is visible
+            else
+                bhopGui.Enabled = state
+            end
+        else
+            -- Just disable the GUI if the state is false
+            if bhopGui then
+                bhopGui.Enabled = state
+            end
         end
-        setupBhopKeybind() -- Re-setup keybind if visibility changes
+        -- Also re-setup keybinds in case visibility changed
+        setupBhopKeybind()
+    end
+})
+
+-- Bhop Mode Dropdown
+local BhopModeDropdown = Tabs.Player:Dropdown({
+    Title = "Bhop Mode",
+    Values = {"Acceleration", "No Acceleration"},
+    Value = getgenv().bhopMode, -- Use the global variable
+    Callback = function(value)
+        getgenv().bhopMode = value -- Update the global variable
+        -- The updateBhop function will handle the mode change on the next heartbeat
+        -- If bhop is currently active, reload the logic to apply the new mode immediately
+        if getgenv().autoJumpEnabled or getgenv().bhopHoldActive then
+             unloadBhop()
+             loadBhop()
+        end
+    end
+})
+
+-- Bhop Acceleration Input
+local BhopAccelInput = Tabs.Player:Input({
+    Title = "Bhop Accel (Negative)",
+    Placeholder = "-0.5",
+    Value = tostring(getgenv().bhopAccelValue), -- Use the global variable
+    NumbersOnly = true, -- WindUI equivalent of Numeric
+    Callback = function(input)
+        local val = tonumber(input)
+        if val and val < 0 then -- Ensure value is a number and negative
+            getgenv().bhopAccelValue = val -- Update the global variable
+        end
     end
 })
 
@@ -531,8 +854,18 @@ local AutoCarryGUIToggle = Tabs.Player:Toggle({
     Value = getgenv().autoCarryGuiVisible,
     Callback = function(state)
         getgenv().autoCarryGuiVisible = state
-        if autoCarryGui then
-            autoCarryGui.Enabled = state
+        if state then
+            -- Create the GUI if it doesn't exist and enable it
+            if not autoCarryGui then
+                createAutoCarryGui(0.12) -- Pass the initial Y offset
+            else
+                autoCarryGui.Enabled = state
+            end
+        else
+            -- Just disable the GUI if the state is false
+            if autoCarryGui then
+                autoCarryGui.Enabled = state
+            end
         end
     end
 })
@@ -559,8 +892,18 @@ local GravityGUIToggle = Tabs.Player:Toggle({
     Value = getgenv().gravityGuiVisible,
     Callback = function(state)
         getgenv().gravityGuiVisible = state
-        if gravityGui then
-            gravityGui.Enabled = state
+        if state then
+            -- Create the GUI if it doesn't exist and enable it
+            if not gravityGui then
+                createGravityGui(0.24) -- Pass the initial Y offset
+            else
+                gravityGui.Enabled = state
+            end
+        else
+            -- Just disable the GUI if the state is false
+            if gravityGui then
+                gravityGui.Enabled = state
+            end
         end
     end
 })
@@ -603,8 +946,18 @@ local AutoCrouchGUIToggle = Tabs.Player:Toggle({
     Value = getgenv().autoCrouchGuiVisible,
     Callback = function(state)
         getgenv().autoCrouchGuiVisible = state
-        if autoCrouchGui then
-            autoCrouchGui.Enabled = state
+        if state then
+            -- Create the GUI if it doesn't exist and enable it
+            if not autoCrouchGui then
+                createAutoCrouchGui(0.36) -- Pass the initial Y offset
+            else
+                autoCrouchGui.Enabled = state
+            end
+        else
+            -- Just disable the GUI if the state is false
+            if autoCrouchGui then
+                autoCrouchGui.Enabled = state
+            end
         end
     end
 })
@@ -736,7 +1089,7 @@ local ButtonSizeYInput = Tabs.Settings:Input({
 -- Apply settings found in memory or defaults
 applyStoredSettings()
 
--- Create GUI buttons when their respective toggles are enabled
+-- Create GUI buttons when their respective *GUI Toggle* is enabled (not just visibility state)
 if getgenv().bhopGuiVisible then createBhopGui(0) setupBhopKeybind() end
 if getgenv().autoCarryGuiVisible then createAutoCarryGui(0.12) end
 if getgenv().gravityGuiVisible then createGravityGui(0.24) end
@@ -766,6 +1119,8 @@ configFile:Register("JumpCapInput", JumpCapInput)
 configFile:Register("SpeedInput", SpeedInput)
 configFile:Register("ApplyMethodDropdown", ApplyMethodDropdown)
 configFile:Register("BhopToggle", BhopToggle)
+configFile:Register("BhopModeDropdown", BhopModeDropdown) -- Register Bhop Mode Dropdown
+configFile:Register("BhopAccelInput", BhopAccelInput) -- Register Bhop Accel Input
 configFile:Register("AutoCarryToggle", AutoCarryToggle)
 configFile:Register("GravityToggle", GravityToggle)
 configFile:Register("GravityInput", GravityInput)
@@ -788,6 +1143,8 @@ applyStoredSettings() -- Apply loaded settings to the game
 -- Update global variables after loading config
 -- The callbacks for BounceHeightInput and EpsilonInput already update the global vars
 -- The BounceToggle callback updates BOUNCE_ENABLED and handles setup/disable
+-- The BhopAccelInput callback updates bhopAccelValue
+-- The BhopModeDropdown callback updates bhopMode
 -- So, the initial state should be correct after Load() and applyStoredSettings()
 
 -- If Bounce was enabled in the config, ensure it's set up
