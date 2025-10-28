@@ -1,5 +1,27 @@
+if getgenv().ZenHubEvadeExecuted then return end
+getgenv().ZenHubEvadeExecuted = true
+
+-- Load WindUI
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
+-- Localization setup (optional, but kept for structure)
+local Localization = WindUI:Localization({
+    Enabled = true,
+    Prefix = "loc:",
+    DefaultLanguage = "en",
+    Translations = {
+        ["en"] = {
+            ["SCRIPT_TITLE"] = "Movement Hub",
+            ["WELCOME"] = "Made by: Zen",
+            ["FEATURES"] = "Features",
+            ["MOVEMENT_TAB"] = "Movement",
+            ["VISUALS_TAB"] = "Visuals",
+            ["SETTINGS_TAB"] = "Settings",
+        }
+    }
+})
+
+-- Global Variables and Feature States
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -12,44 +34,27 @@ local character = player.Character or player.CharacterAdded:WaitForChild(player)
 local rootPart = character:WaitForChild("HumanoidRootPart")
 local humanoid = character:WaitForChild("Humanoid")
 
--- Global Variables and Feature States
-if not getgenv().bounceEnabled then getgenv().bounceEnabled = false end
-if not getgenv().bounceHeight then getgenv().bounceHeight = 0 end
-if not getgenv().bounceEpsilon then getgenv().bounceEpsilon = 0.1 end
-if not getgenv().bhopMode then getgenv().bhopMode = "Acceleration" end
-if not getgenv().bhopAccelValue then getgenv().bhopAccelValue = -0.1 end
-if not getgenv().bhopHoldActive then getgenv().bhopHoldActive = false end
-if not getgenv().autoJumpEnabled then getgenv().autoJumpEnabled = false end
-if not getgenv().guiButtonSizeX then getgenv().guiButtonSizeX = 60 end
-if not getgenv().guiButtonSizeY then getgenv().guiButtonSizeY = 60 end
+-- Feature States
+local featureStates = featureStates or {}
+featureStates.Bhop = false
+featureStates.Bounce = false
+featureStates.TimerDisplay = false
+featureStates.FullBright = false
 
-if not featureStates then
-    featureStates = {
-        Bhop = false,
-        BhopHold = false,
-        BhopGuiVisible = false,
-        Bounce = false,
-        BounceGuiVisible = false,
-        TimerDisplay = false,
-        FullBright = false,
-    }
-end
-
-if not currentSettings then
-    currentSettings = {
-        AirStrafeAcceleration = "187",
-        JumpCap = "1",
-        Speed = "16",
-        ApplyMode = "", -- Default to empty/unselected
-    }
-end
+-- Global Settings
+local currentSettings = currentSettings or {
+    AirStrafeAcceleration = "187",
+    JumpCap = "1",
+    Speed = "16",
+    ApplyMode = "", -- Default to empty/unselected
+}
 
 -- Connections
 local bhopConnection = nil
 local bounceConnection = nil
 local fullbrightConnection = nil
 
--- GUI Variables
+-- GUI Elements
 local bhopGui, bhopGuiButton
 local bounceGui, bounceGuiButton
 local timerGui, timerLabel
@@ -133,7 +138,7 @@ local Window = WindUI:Window({
 
 local Tabs = {}
 Tabs.Movement = Window:Tab({ Title = "Movement", Icon = "motion" })
-Tabs.Visual = Window:Tab({ Title = "Visual", Icon = "eye" })
+Tabs.Visual = Window:Tab({ Title = "Visuals", Icon = "eye" })
 Tabs.Settings = Window:Tab({ Title = "Settings", Icon = "settings" })
 
 -- Movement Tab
@@ -179,16 +184,12 @@ local BhopToggle = Tabs.Movement:Toggle({
     Value = featureStates.Bhop,
     Callback = function(state)
         featureStates.Bhop = state
-        getgenv().autoJumpEnabled = state
         if state then
             if not bhopConnection then
                 bhopConnection = RunService.Heartbeat:Connect(function()
-                    if getgenv().autoJumpEnabled and humanoid and humanoid.FloorMaterial ~= Enum.Material.Air and rootPart.Velocity.Y < 1 then
-                        if getgenv().bhopMode == "Acceleration" then
-                            rootPart.Velocity = Vector3.new(rootPart.Velocity.X, math.abs(rootPart.Velocity.Y) + getgenv().bhopAccelValue, rootPart.Velocity.Z)
-                        else
-                            humanoid.Jump = true
-                        end
+                    if featureStates.Bhop and humanoid and humanoid.FloorMaterial ~= Enum.Material.Air and rootPart.Velocity.Y < 1 then
+                        -- Simple Bhop logic
+                        humanoid.Jump = true
                     end
                 end)
             end
@@ -205,40 +206,9 @@ local BhopToggle = Tabs.Movement:Toggle({
     end
 })
 
-local BhopModeDropdown = Tabs.Movement:Dropdown({
-    Title = "Bhop Mode",
-    Values = {"Acceleration", "No Acceleration"},
-    Multi = false,
-    Default = getgenv().bhopMode,
-    Callback = function(value)
-        getgenv().bhopMode = value
-    end
-})
-
-local BhopAccelInput = Tabs.Movement:Input({
-    Title = "Bhop Accel (Negative)",
-    Placeholder = "-0.5",
-    Value = tostring(getgenv().bhopAccelValue),
-    Numeric = true,
-    Callback = function(input)
-        local val = tonumber(input)
-        if val and val < 0 then
-            getgenv().bhopAccelValue = val
-        end
-    end
-})
-
-local BhopHoldToggle = Tabs.Movement:Toggle({
-    Title = "Bhop (Hold Space/Jump)",
-    Value = getgenv().bhopHoldActive,
-    Callback = function(state)
-        getgenv().bhopHoldActive = state
-    end
-})
-
 local BhopGuiToggle = Tabs.Movement:Toggle({
     Title = "Show Bhop GUI Button",
-    Value = featureStates.BhopGuiVisible,
+    Value = featureStates.BhopGuiVisible or false,
     Callback = function(state)
         featureStates.BhopGuiVisible = state
         if bhopGui then
@@ -251,17 +221,16 @@ Tabs.Movement:Section({ Title = "Bounce", TextSize = 20 })
 
 local BounceToggle = Tabs.Movement:Toggle({
     Title = "Enable Bounce",
-    Value = getgenv().bounceEnabled,
+    Value = featureStates.Bounce,
     Callback = function(state)
-        getgenv().bounceEnabled = state
         featureStates.Bounce = state
         if state then
             if not bounceConnection then
                 bounceConnection = RunService.Heartbeat:Connect(function()
                     if character and rootPart and humanoid.FloorMaterial ~= Enum.Material.Air then
-                        if rootPart.Velocity.Y < -getgenv().bounceEpsilon then
+                        if rootPart.Velocity.Y < -0.1 then
                             if humanoid.FloorMaterial ~= Enum.Material.Air and rootPart.Velocity.Y > -1 then
-                                rootPart.Velocity = Vector3.new(rootPart.Velocity.X, getgenv().bounceHeight, rootPart.Velocity.Z)
+                                rootPart.Velocity = Vector3.new(rootPart.Velocity.X, 10, rootPart.Velocity.Z)
                             end
                         end
                     end
@@ -280,35 +249,9 @@ local BounceToggle = Tabs.Movement:Toggle({
     end
 })
 
-local BounceHeightInput = Tabs.Movement:Input({
-    Title = "Bounce Height",
-    Placeholder = "Default 0",
-    Value = tostring(getgenv().bounceHeight),
-    Numeric = true,
-    Callback = function(input)
-        local val = tonumber(input)
-        if val then
-            getgenv().bounceHeight = math.max(0, val)
-        end
-    end
-})
-
-local BounceEpsilonInput = Tabs.Movement:Input({
-    Title = "Touch Detection Epsilon",
-    Placeholder = "Default 0.1",
-    Value = tostring(getgenv().bounceEpsilon),
-    Numeric = true,
-    Callback = function(input)
-        local val = tonumber(input)
-        if val then
-            getgenv().bounceEpsilon = math.max(0, val)
-        end
-    end
-})
-
 local BounceGuiToggle = Tabs.Movement:Toggle({
     Title = "Show Bounce GUI Button",
-    Value = featureStates.BounceGuiVisible,
+    Value = featureStates.BounceGuiVisible or false,
     Callback = function(state)
         featureStates.BounceGuiVisible = state
         if bounceGui then
@@ -327,29 +270,12 @@ local FullBrightToggle = Tabs.Visual:Toggle({
         featureStates.FullBright = state
         if state then
             if not fullbrightConnection then
-                local originalBrightness = Lighting.Brightness
-                local originalOutdoorAmbient = Lighting.OutdoorAmbient
-                local originalAmbient = Lighting.Ambient
-                local originalGlobalShadows = Lighting.GlobalShadows
-
                 fullbrightConnection = RunService.Heartbeat:Connect(function()
                     Lighting.Brightness = 2
                     Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
                     Lighting.Ambient = Color3.fromRGB(255, 255, 255)
                     Lighting.GlobalShadows = false
                 end)
-
-                -- Disconnect and restore on disable
-                if not featureStates.FullBright then
-                    if fullbrightConnection then
-                        fullbrightConnection:Disconnect()
-                        fullbrightConnection = nil
-                        Lighting.Brightness = originalBrightness
-                        Lighting.OutdoorAmbient = originalOutdoorAmbient
-                        Lighting.Ambient = originalAmbient
-                        Lighting.GlobalShadows = originalGlobalShadows
-                    end
-                end
             end
         else
             if fullbrightConnection then
@@ -381,15 +307,15 @@ Tabs.Settings:Section({ Title = "GUI Settings", TextSize = 20 })
 local ButtonSizeXInput = Tabs.Settings:Input({
     Title = "GUI Width (X)",
     Placeholder = "60",
-    Value = tostring(getgenv().guiButtonSizeX),
+    Value = tostring(getgenv().guiButtonSizeX or 60),
     Numeric = true,
     Callback = function(input)
         local val = tonumber(input)
         if val then
             getgenv().guiButtonSizeX = math.max(20, val)
-            if bhopGui and bhopGui.Frame then bhopGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
-            if bounceGui and bounceGui.Frame then bounceGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
-            if timerGui and timerGui.Frame then timerGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
+            if bhopGui and bhopGui.Frame then bhopGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY or 60) end
+            if bounceGui and bounceGui.Frame then bounceGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY or 60) end
+            if timerGui and timerGui.Frame then timerGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY or 60) end
         end
     end
 })
@@ -397,15 +323,15 @@ local ButtonSizeXInput = Tabs.Settings:Input({
 local ButtonSizeYInput = Tabs.Settings:Input({
     Title = "GUI Height (Y)",
     Placeholder = "60",
-    Value = tostring(getgenv().guiButtonSizeY),
+    Value = tostring(getgenv().guiButtonSizeY or 60),
     Numeric = true,
     Callback = function(input)
         local val = tonumber(input)
         if val then
             getgenv().guiButtonSizeY = math.max(20, val)
-            if bhopGui and bhopGui.Frame then bhopGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
-            if bounceGui and bounceGui.Frame then bounceGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
-            if timerGui and timerGui.Frame then timerGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
+            if bhopGui and bhopGui.Frame then bhopGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX or 60, 0, getgenv().guiButtonSizeY) end
+            if bounceGui and bounceGui.Frame then bounceGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX or 60, 0, getgenv().guiButtonSizeY) end
+            if timerGui and timerGui.Frame then timerGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX or 60, 0, getgenv().guiButtonSizeY) end
         end
     end
 })
@@ -414,17 +340,10 @@ local SaveSettingsButton = Tabs.Settings:Button({
     Title = "Save Settings",
     Callback = function()
         local settings = {
-            bounceEnabled = getgenv().bounceEnabled,
-            bounceHeight = getgenv().bounceHeight,
-            bounceEpsilon = getgenv().bounceEpsilon,
-            bhopMode = getgenv().bhopMode,
-            bhopAccelValue = getgenv().bhopAccelValue,
-            bhopHoldActive = getgenv().bhopHoldActive,
-            autoJumpEnabled = getgenv().autoJumpEnabled,
-            guiButtonSizeX = getgenv().guiButtonSizeX,
-            guiButtonSizeY = getgenv().guiButtonSizeY,
             featureStates = featureStates,
             currentSettings = currentSettings,
+            guiButtonSizeX = getgenv().guiButtonSizeX or 60,
+            guiButtonSizeY = getgenv().guiButtonSizeY or 60,
         }
         writefile("evade_movement_config.txt", game:GetService("HttpService"):JSONEncode(settings))
         WindUI:Notify({Title = "Settings", Content = "Settings saved successfully!", Duration = 3})
@@ -438,36 +357,24 @@ local LoadSettingsButton = Tabs.Settings:Button({
             local fileContent = readfile("evade_movement_config.txt")
             local settings = game:GetService("HttpService"):JSONDecode(fileContent)
             
-            getgenv().bounceEnabled = settings.bounceEnabled or false
-            getgenv().bounceHeight = settings.bounceHeight or 0
-            getgenv().bounceEpsilon = settings.bounceEpsilon or 0.1
-            getgenv().bhopMode = settings.bhopMode or "Acceleration"
-            getgenv().bhopAccelValue = settings.bhopAccelValue or -0.1
-            getgenv().bhopHoldActive = settings.bhopHoldActive or false
-            getgenv().autoJumpEnabled = settings.autoJumpEnabled or false
-            getgenv().guiButtonSizeX = settings.guiButtonSizeX or 60
-            getgenv().guiButtonSizeY = settings.guiButtonSizeY or 60
             featureStates = settings.featureStates or featureStates
             currentSettings = settings.currentSettings or currentSettings
+            getgenv().guiButtonSizeX = settings.guiButtonSizeX or 60
+            getgenv().guiButtonSizeY = settings.guiButtonSizeY or 60
 
             -- Update UI elements
-            BounceToggle:Set(featureStates.Bounce)
-            BounceHeightInput:Set(tostring(getgenv().bounceHeight))
-            BounceEpsilonInput:Set(tostring(getgenv().bounceEpsilon))
-            BhopModeDropdown:Set(getgenv().bhopMode)
-            BhopAccelInput:Set(tostring(getgenv().bhopAccelValue))
-            BhopHoldToggle:Set(getgenv().bhopHoldActive)
             BhopToggle:Set(featureStates.Bhop)
-            ButtonSizeXInput:Set(tostring(getgenv().guiButtonSizeX))
-            ButtonSizeYInput:Set(tostring(getgenv().guiButtonSizeY))
+            BhopGuiToggle:Set(featureStates.BhopGuiVisible or false)
+            BounceToggle:Set(featureStates.Bounce)
+            BounceGuiToggle:Set(featureStates.BounceGuiVisible or false)
             FullBrightToggle:Set(featureStates.FullBright)
             TimerDisplayToggle:Set(featureStates.TimerDisplay)
             ApplyMethodDropdown:Set(currentSettings.ApplyMode)
             SpeedInput:Set(currentSettings.Speed)
             StrafeInput:Set(currentSettings.AirStrafeAcceleration)
             JumpCapInput:Set(currentSettings.JumpCap)
-            BhopGuiToggle:Set(featureStates.BhopGuiVisible)
-            BounceGuiToggle:Set(featureStates.BounceGuiVisible)
+            ButtonSizeXInput:Set(tostring(getgenv().guiButtonSizeX))
+            ButtonSizeYInput:Set(tostring(getgenv().guiButtonSizeY))
 
             WindUI:Notify({Title = "Settings", Content = "Settings loaded successfully!", Duration = 3})
         else
@@ -483,9 +390,9 @@ local ResetGuiSizeButton = Tabs.Settings:Button({
         getgenv().guiButtonSizeY = 30
         ButtonSizeXInput:Set("200")
         ButtonSizeYInput:Set("30")
-        if bhopGui and bhopGui.Frame then bhopGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
-        if bounceGui and bounceGui.Frame then bounceGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
-        if timerGui and timerGui.Frame then timerGui.Frame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY) end
+        if bhopGui and bhopGui.Frame then bhopGui.Frame.Size = UDim2.new(0, 200, 0, 30) end
+        if bounceGui and bounceGui.Frame then bounceGui.Frame.Size = UDim2.new(0, 200, 0, 30) end
+        if timerGui and timerGui.Frame then timerGui.Frame.Size = UDim2.new(0, 200, 0, 30) end
         WindUI:Notify({Title = "Settings", Content = "GUI size reset to default!", Duration = 3})
     end
 })
@@ -496,13 +403,13 @@ bhopGui = Instance.new("ScreenGui")
 bhopGui.Name = "BhopGui"
 bhopGui.IgnoreGuiInset = true
 bhopGui.ResetOnSpawn = false
-bhopGui.Enabled = featureStates.BhopGuiVisible
+bhopGui.Enabled = featureStates.BhopGuiVisible or false
 bhopGui.Parent = playerGui
 
 local bhopFrame = Instance.new("Frame")
 bhopFrame.Name = "Frame"
-bhopFrame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY)
-bhopFrame.Position = UDim2.new(0.5, -getgenv().guiButtonSizeX/2, 0.12, 0)
+bhopFrame.Size = UDim2.new(0, getgenv().guiButtonSizeX or 60, 0, getgenv().guiButtonSizeY or 60)
+bhopFrame.Position = UDim2.new(0.5, -(getgenv().guiButtonSizeX or 60)/2, 0.12, 0)
 bhopFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 bhopFrame.BackgroundTransparency = 0.35
 bhopFrame.BorderSizePixel = 0
@@ -529,10 +436,10 @@ bhopLabel.Parent = bhopFrame
 
 bhopGuiButton = Instance.new("TextButton")
 bhopGuiButton.Name = "ToggleButton"
-bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
+bhopGuiButton.Text = featureStates.Bhop and "On" or "Off"
 bhopGuiButton.Size = UDim2.new(0.9, 0, 0.45, 0)
 bhopGuiButton.Position = UDim2.new(0.05, 0, 0.5, 0)
-bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+bhopGuiButton.BackgroundColor3 = featureStates.Bhop and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
 bhopGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 bhopGuiButton.Font = Enum.Font.Roboto
 bhopGuiButton.TextSize = 14
@@ -546,10 +453,9 @@ bhopButtonCorner.CornerRadius = UDim.new(0, 4)
 bhopButtonCorner.Parent = bhopGuiButton
 
 bhopGuiButton.MouseButton1Click:Connect(function()
-    getgenv().autoJumpEnabled = not getgenv().autoJumpEnabled
-    featureStates.Bhop = getgenv().autoJumpEnabled
-    bhopGuiButton.Text = getgenv().autoJumpEnabled and "On" or "Off"
-    bhopGuiButton.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    featureStates.Bhop = not featureStates.Bhop
+    bhopGuiButton.Text = featureStates.Bhop and "On" or "Off"
+    bhopGuiButton.BackgroundColor3 = featureStates.Bhop and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
     BhopToggle:Set(featureStates.Bhop)
 end)
 
@@ -558,13 +464,13 @@ bounceGui = Instance.new("ScreenGui")
 bounceGui.Name = "BounceGui"
 bounceGui.IgnoreGuiInset = true
 bounceGui.ResetOnSpawn = false
-bounceGui.Enabled = featureStates.BounceGuiVisible
+bounceGui.Enabled = featureStates.BounceGuiVisible or false
 bounceGui.Parent = playerGui
 
 local bounceFrame = Instance.new("Frame")
 bounceFrame.Name = "Frame"
-bounceFrame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY)
-bounceFrame.Position = UDim2.new(0.5, -getgenv().guiButtonSizeX/2, 0.20, 0)
+bounceFrame.Size = UDim2.new(0, getgenv().guiButtonSizeX or 60, 0, getgenv().guiButtonSizeY or 60)
+bounceFrame.Position = UDim2.new(0.5, -(getgenv().guiButtonSizeX or 60)/2, 0.20, 0)
 bounceFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 bounceFrame.BackgroundTransparency = 0.35
 bounceFrame.BorderSizePixel = 0
@@ -591,10 +497,10 @@ bounceLabel.Parent = bounceFrame
 
 bounceGuiButton = Instance.new("TextButton")
 bounceGuiButton.Name = "ToggleButton"
-bounceGuiButton.Text = getgenv().bounceEnabled and "On" or "Off"
+bounceGuiButton.Text = featureStates.Bounce and "On" or "Off"
 bounceGuiButton.Size = UDim2.new(0.9, 0, 0.45, 0)
 bounceGuiButton.Position = UDim2.new(0.05, 0, 0.5, 0)
-bounceGuiButton.BackgroundColor3 = getgenv().bounceEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+bounceGuiButton.BackgroundColor3 = featureStates.Bounce and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
 bounceGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 bounceGuiButton.Font = Enum.Font.Roboto
 bounceGuiButton.TextSize = 14
@@ -608,10 +514,9 @@ bounceButtonCorner.CornerRadius = UDim.new(0, 4)
 bounceButtonCorner.Parent = bounceGuiButton
 
 bounceGuiButton.MouseButton1Click:Connect(function()
-    getgenv().bounceEnabled = not getgenv().bounceEnabled
-    featureStates.Bounce = getgenv().bounceEnabled
-    bounceGuiButton.Text = getgenv().bounceEnabled and "On" or "Off"
-    bounceGuiButton.BackgroundColor3 = getgenv().bounceEnabled and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    featureStates.Bounce = not featureStates.Bounce
+    bounceGuiButton.Text = featureStates.Bounce and "On" or "Off"
+    bounceGuiButton.BackgroundColor3 = featureStates.Bounce and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
     BounceToggle:Set(featureStates.Bounce)
 end)
 
@@ -625,7 +530,7 @@ timerGui.Parent = playerGui
 
 local timerFrame = Instance.new("Frame")
 timerFrame.Name = "Frame"
-timerFrame.Size = UDim2.new(0, getgenv().guiButtonSizeX, 0, getgenv().guiButtonSizeY)
+timerFrame.Size = UDim2.new(0, getgenv().guiButtonSizeX or 60, 0, getgenv().guiButtonSizeY or 60)
 timerFrame.Position = UDim2.new(0.02, 0, 0.02, 0)
 timerFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 timerFrame.BackgroundTransparency = 0.35
@@ -688,8 +593,6 @@ player.CharacterAdded:Connect(function(newCharacter)
     
     -- Apply ApplyMode if set (Note: This is a placeholder, actual implementation depends on the game)
     if currentSettings.ApplyMode ~= "" then
-        -- Example: ChangeSettingRemote:InvokeServer(settingId, value)
-        -- For now, just log
         print("[Movement Hub] ApplyMode set to:", currentSettings.ApplyMode)
     end
 end)
