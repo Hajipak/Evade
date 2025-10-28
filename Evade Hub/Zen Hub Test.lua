@@ -1397,5 +1397,3 @@ createAutoCrouchGui()
 createGravityGui()
 createAutoCarryGui()
 createLagSwitchGui()
-
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
