@@ -54,9 +54,9 @@ loadSettings()
 WindUI.TransparencyValue = 0.2
 WindUI:SetTheme("Dark")
 local Window = WindUI:CreateWindow({
-    Title = "Evade Tester - Minimal",
+    Title = "Movement Hub Test",
     Icon = "rocket",
-    Author = "Made by ChatGPT",
+    Author = "Made by Zen",
     Size = UDim2.fromOffset(580, 420),
     Theme = "Dark",
     SideBarWidth = 200
