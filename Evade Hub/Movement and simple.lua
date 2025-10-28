@@ -5,8 +5,6 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
-local TweenService = game:GetService("TweenService")
-local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -22,9 +20,6 @@ if not getgenv().bhopMode then getgenv().bhopMode = "Acceleration" end
 if not getgenv().bhopAccelValue then getgenv().bhopAccelValue = -0.1 end
 if not getgenv().bhopHoldActive then getgenv().bhopHoldActive = false end
 if not getgenv().autoJumpEnabled then getgenv().autoJumpEnabled = false end
-if not getgenv().customGravityEnabled then getgenv().customGravityEnabled = false end
-if not getgenv().customGravityValue then getgenv().customGravityValue = workspace.Gravity end
-if not getgenv().slideSpeed then getgenv().slideSpeed = -8 end
 if not getgenv().guiButtonSizeX then getgenv().guiButtonSizeX = 60 end
 if not getgenv().guiButtonSizeY then getgenv().guiButtonSizeY = 60 end
 
@@ -33,13 +28,6 @@ if not featureStates then
         Bhop = false,
         BhopHold = false,
         BhopGuiVisible = false,
-        AutoCarry = false,
-        AutoCarryGuiVisible = false,
-        AutoCrouch = false,
-        AutoCrouchGuiVisible = false,
-        CustomGravity = false,
-        GravityValue = workspace.Gravity,
-        GravityGuiVisible = false,
         Bounce = false,
         BounceGuiVisible = false,
         TimerDisplay = false,
@@ -58,14 +46,7 @@ end
 
 -- Connections
 local bhopConnection = nil
-local slideConnection = nil
 local bounceConnection = nil
-local autoCarryConnection = nil
-local autoCrouchConnection = nil
-local gravityConnection = nil
-local originalGravity = workspace.Gravity
-local roundStartedConnection = nil
-local characterAddedConnection = nil
 local fullbrightConnection = nil
 
 -- GUI Variables
@@ -440,9 +421,6 @@ local SaveSettingsButton = Tabs.Settings:Button({
             bhopAccelValue = getgenv().bhopAccelValue,
             bhopHoldActive = getgenv().bhopHoldActive,
             autoJumpEnabled = getgenv().autoJumpEnabled,
-            customGravityEnabled = getgenv().customGravityEnabled,
-            customGravityValue = getgenv().customGravityValue,
-            slideSpeed = getgenv().slideSpeed,
             guiButtonSizeX = getgenv().guiButtonSizeX,
             guiButtonSizeY = getgenv().guiButtonSizeY,
             featureStates = featureStates,
@@ -467,9 +445,6 @@ local LoadSettingsButton = Tabs.Settings:Button({
             getgenv().bhopAccelValue = settings.bhopAccelValue or -0.1
             getgenv().bhopHoldActive = settings.bhopHoldActive or false
             getgenv().autoJumpEnabled = settings.autoJumpEnabled or false
-            getgenv().customGravityEnabled = settings.customGravityEnabled or false
-            getgenv().customGravityValue = settings.customGravityValue or workspace.Gravity
-            getgenv().slideSpeed = settings.slideSpeed or -8
             getgenv().guiButtonSizeX = settings.guiButtonSizeX or 60
             getgenv().guiButtonSizeY = settings.guiButtonSizeY or 60
             featureStates = settings.featureStates or featureStates
@@ -679,7 +654,7 @@ timerLabel.Parent = timerFrame
 
 local timerConnection = RunService.Heartbeat:Connect(function()
     if featureStates.TimerDisplay then
-        local elapsed = tick() % 86400 -- seconds in a day
+        local elapsed = tick() % 86400
         local hours = math.floor(elapsed / 3600)
         local minutes = math.floor((elapsed % 3600) / 60)
         local seconds = math.floor(elapsed % 60)
@@ -688,8 +663,8 @@ local timerConnection = RunService.Heartbeat:Connect(function()
 end)
 
 -- Character Added Connection for persistence
-characterAddedConnection = player.CharacterAdded:Connect(function(newCharacter)
-    wait(0.1) -- Allow character to fully load
+player.CharacterAdded:Connect(function(newCharacter)
+    wait(0.1)
     character = newCharacter
     rootPart = character:WaitForChild("HumanoidRootPart")
     humanoid = character:WaitForChild("Humanoid")
@@ -711,11 +686,11 @@ characterAddedConnection = player.CharacterAdded:Connect(function(newCharacter)
         applyToTables(function(obj) obj.AirStrafeAcceleration = strafeVal end)
     end
     
-    -- Apply ApplyMode if set
+    -- Apply ApplyMode if set (Note: This is a placeholder, actual implementation depends on the game)
     if currentSettings.ApplyMode ~= "" then
-        -- This would depend on the game's specific remote event system
-        -- For now, just log or apply to a global variable
         -- Example: ChangeSettingRemote:InvokeServer(settingId, value)
+        -- For now, just log
+        print("[Movement Hub] ApplyMode set to:", currentSettings.ApplyMode)
     end
 end)
 
