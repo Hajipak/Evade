@@ -1299,13 +1299,8 @@ local function createLagSwitchGui()
     end)
 
     -- Lag Switch Button Click Function
-    toggleButton.MouseButton1Click:Connect(function()
-        -- Execute the More-loadstring.lua script
-        local success, err = pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
-        end)
-        -- Error handling is done within the pcall
-    end)
+    toggleButton.MouseButton1Click:Connect(function)
+ end)
 
     lagGuiButton = toggleButton
 end
