@@ -3,6 +3,16 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
+local Window = Fluent:CreateWindow({
+    Title = "Movement Hub",
+    SubTitle = "by Zen",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -214,16 +224,83 @@ local function updateGravity()
     end
 end
 
--- Buat Window dan Tabs *SETELAH* library dimuat
-local Window = Fluent:CreateWindow({
-    Title = "Movement Hub",
-    SubTitle = "by Zen",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-})
+local function startLagSwitch()
+    if getgenv().lagSwitchEnabled and not getgenv().isLagActive then
+        getgenv().isLagActive = true
+        -- Simulasi lag dengan mematikan Heartbeat untuk durasi tertentu
+        RunService:SetRobloxPhysicsGravity(999999) -- Ganti dengan nilai tinggi
+        RunService:SetRobloxPhysicsWind(999999, 999999, 999999) -- Ganti dengan nilai tinggi
+        -- Atau putuskan koneksi jaringan sementara (lebih kompleks, bisa gunakan VirtualUser)
+        -- VirtualUser:CaptureController()
+        task.wait(getgenv().lagDuration)
+        RunService:SetRobloxPhysicsGravity(Workspace.Gravity) -- Kembalikan nilai asli
+        RunService:SetRobloxPhysicsWind(0, 0, 0) -- Kembalikan nilai asli
+        -- VirtualUser:UncaptureController()
+        getgenv().isLagActive = false
+    end
+end
+
+local function stopLagSwitch()
+    -- Tidak ada fungsi khusus untuk menghentikan lag switch yang sedang aktif
+    -- karena ini berjalan dalam satu task. Namun, kita bisa membatalkan task jika diperlukan.
+    -- Untuk saat ini, cukup nonaktifkan flag.
+    getgenv().lagSwitchEnabled = false
+end
+
+local function startTimerDisplay()
+    -- Implementasi tampilan timer (mungkin dengan membuat GUI di PlayerGui)
+    local MainInterface = Instance.new("ScreenGui")
+    MainInterface.Name = "MainInterface"
+    MainInterface.Parent = PlayerGui
+    MainInterface.ResetOnSpawn = false
+
+    local TimerContainer = Instance.new("Frame")
+    TimerContainer.Name = "TimerContainer"
+    TimerContainer.Size = UDim2.new(0, 200, 0, 50)
+    TimerContainer.Position = UDim2.new(0.5, -100, 0.05, 0) -- Atas tengah
+    TimerContainer.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    TimerContainer.BackgroundTransparency = 0.5
+    TimerContainer.Parent = MainInterface
+
+    local TimerLabel = Instance.new("TextLabel")
+    TimerLabel.Name = "TimerLabel"
+    TimerLabel.Size = UDim2.new(1, 0, 1, 0)
+    TimerLabel.BackgroundTransparency = 1
+    TimerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TimerLabel.Font = Enum.Font.Gotham
+    TimerLabel.TextSize = 20
+    TimerLabel.Text = "00:00"
+    TimerLabel.Parent = TimerContainer
+
+    getgenv().timerGui = MainInterface
+    getgenv().timerLabel = TimerLabel
+
+    -- Fungsi untuk memperbarui timer (misalnya, waktu server atau waktu lokal)
+    -- local startTime = tick()
+    getgenv().timerConnection = RunService.Heartbeat:Connect(function()
+        if getgenv().timerDisplayEnabled and getgenv().timerLabel then
+            -- local elapsed = tick() - startTime
+            -- local minutes = math.floor(elapsed / 60)
+            -- local seconds = math.floor(elapsed % 60)
+            -- getgenv().timerLabel.Text = string.format("%02d:%02d", minutes, seconds)
+            -- Contoh sederhana: tampilkan waktu lokal
+            local currentTime = os.date("%H:%M:%S")
+            getgenv().timerLabel.Text = currentTime
+        end
+    end)
+end
+
+local function stopTimerDisplay()
+    if getgenv().timerConnection then
+        getgenv().timerConnection:Disconnect()
+        getgenv().timerConnection = nil
+    end
+    if getgenv().timerGui then
+        getgenv().timerGui:Destroy()
+        getgenv().timerGui = nil
+        getgenv().timerLabel = nil
+    end
+end
 
 -- Tabs
 local Tabs = {
@@ -359,6 +436,10 @@ local function createFloatingGui(guiName, label, initialYOffset, stateVar, toggl
             if getgenv()[stateVar] then startAutoCarry() else stopAutoCarry() end
         elseif stateVar == "customGravityEnabled" then
             updateGravity()
+        elseif stateVar == "lagSwitchEnabled" then
+            if getgenv()[stateVar] then startLagSwitch() else stopLagSwitch() end
+        elseif stateVar == "timerDisplayEnabled" then
+            if getgenv()[stateVar] then startTimerDisplay() else stopTimerDisplay() end
         end
     end)
 
@@ -556,6 +637,7 @@ local LagSwitchToggle = UtilitySection:CreateToggle({
             LagSwitchFloatingButton.BackgroundColor3 = state and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
         end
         -- Implementasi logika Lag Switch di sini jika diperlukan
+        if state then startLagSwitch() else stopLagSwitch() end
     end
 })
 
@@ -577,8 +659,7 @@ local TimerDisplayToggle = UtilitySection:CreateToggle({
         getgenv().timerDisplayEnabled = state
         getgenv().featureStates.TimerDisplay = state
         -- Implementasikan logika tampilan timer di sini
-        -- Contoh: local MainInterface = PlayerGui:WaitForChild("MainInterface", 5)
-        -- if MainInterface then local TimerContainer = MainInterface:WaitForChild("TimerContainer", 5) if TimerContainer then TimerContainer.Visible = state end end
+        if state then startTimerDisplay() else stopTimerDisplay() end
     end
 })
 
@@ -671,15 +752,21 @@ local AutoCarryFloatingGui, AutoCarryFloatingButton = createFloatingGui("AutoCar
 local GravityFloatingGui, GravityFloatingButton = createFloatingGui("GravityGui", "Gravity", 0.21, "customGravityEnabled", GravityToggle)
 local LagSwitchFloatingGui, LagSwitchFloatingButton = createFloatingGui("LagSwitchGui", "Lag", 0.28, "lagSwitchEnabled", LagSwitchToggle)
 
--- Setup SaveManager
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
+-- Setup SaveManager dan InterfaceManager di akhir script
+-- (we dont want configs to save themes, do we?)
 SaveManager:IgnoreThemeSettings()
+-- You can add indexes of elements the save manager should ignore
 SaveManager:SetIgnoreIndexes({})
 
-SaveManager:RegisterNewElement(BhopToggle, "BhopToggle")
-SaveManager:RegisterNewElement(AutoCrouchToggle, "AutoCrouchToggle")
-SaveManager:RegisterNewElement(AutoCarryToggle, "AutoCarryToggle")
-SaveManager:RegisterNewElement(GravityToggle, "GravityToggle")
-SaveManager:RegisterNewElement(LagSwitchToggle, "LagSwitchToggle")
-SaveManager:RegisterNewElement(TimerDisplayToggle, "TimerDisplayToggle")
+-- use case for doing it this way:
+-- a script hub could have themes in a global folder
+-- and game configs in a separate folder per game
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:SetFolder("FluentScriptHub/specific-game")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+-- Fluent:Notify({Title = "Fluent", Content = "The script has been loaded.", Duration = 8}) -- Opsional, bisa dihapus jika tidak diinginkan
