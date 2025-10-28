@@ -1211,13 +1211,4 @@ if featureStates.TimerDisplay then
 end
 
 -- Execute the additional loadstring after everything else is set up
-local success, err = pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
-end)
-
-if not success then
-    warn("Error executing additional loadstring: ", err)
-end
-
--- Add a save button if needed (optional)
--- Tabs.Settings:Button({Title = "Save Config", Callback = function() configFile:Save() end})
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
