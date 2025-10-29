@@ -1,760 +1,574 @@
--- Evade Test (Trimmed Final)
--- Features: Bhop, Auto Crouch, Bounce, Strafe Acceleration, Jump Cap, Speed, Timer Display, FullBright
--- On-screen GUI buttons for: Auto Crouch, Bhop, Bounce (draggable)
--- Tab Auto includes toggles to Show/Hide Bhop & Bounce on-screen buttons
--- Tab Auto includes GUI Settings: ButtonWidth, ButtonHeight (default 50x50)
+-- Pastikan untuk menjalankan skrip ini *setelah* WindUI telah dimuat dan jendela utama dibuat.
+-- Diasumsikan variabel seperti Players, RunService, UserInputService, dll. sudah tersedia.
 
-if getgenv().EvadeTrimFinalLoaded then return end
-getgenv().EvadeTrimFinalLoaded = true
+if getgenv().ZenHubEvadeExecuted then return end
+getgenv().ZenHubEvadeExecuted = true
 
--- Services
+-- Load WindUI
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
+-- Localization setup
+local Localization = WindUI:Localization({
+    Enabled = true,
+    Prefix = "loc:",
+    DefaultLanguage = "en",
+    Translations = {
+        ["en"] = {
+            ["SCRIPT_TITLE"] = "Zen Hub",
+            ["WELCOME"] = "Made by: Zen",
+            ["FEATURES"] = "Features",
+            ["Player_TAB"] = "Player",
+            ["AUTO_TAB"] = "Auto",
+            ["VISUALS_TAB"] = "Visuals",
+            ["ESP_TAB"] = "ESP",
+            ["SETTINGS_TAB"] = "Settings",
+            ["INFINITE_JUMP"] = "Infinite Jump",
+            -- Tambahkan terjemahan lainnya sesuai kebutuhan
+        }
+    }
+})
+
+-- Set WindUI properties
+WindUI.TransparencyValue = 0.2
+WindUI:SetTheme("Dark")
+
+-- Create WindUI window
+local Window = WindUI:CreateWindow({
+    Title = "loc:SCRIPT_TITLE",
+    Icon = "rocket",
+    Author = "loc:WELCOME",
+    Folder = "GameHackUI",
+    Size = UDim2.fromOffset(580, 490),
+    Theme = "Dark",
+    HidePanelBackground = false,
+    Acrylic = false,
+    HideSearchBar = false,
+    SideBarWidth = 200
+})
+
+local isWindowOpen = false
+local function updateWindowOpenState()
+    if Window and type(Window.IsOpen) == "function" then
+        isWindowOpen = Window:IsOpen()
+    end
+end
+
+local FeatureSection = Window:Section({ Title = "loc:FEATURES", Opened = true })
+
+local Tabs = {
+    Main = FeatureSection:Tab({ Title = "Main", Icon = "layout-grid" }),
+    Player = FeatureSection:Tab({ Title = "loc:Player_TAB", Icon = "user" }),
+    Auto = FeatureSection:Tab({ Title = "loc:AUTO_TAB", Icon = "repeat-2" }),
+    Visuals = FeatureSection:Tab({ Title = "loc:VISUALS_TAB", Icon = "camera" }),
+    ESP = FeatureSection:Tab({ Title = "loc:ESP_TAB", Icon = "eye" }),
+    Settings = FeatureSection:Tab({ Title = "loc:SETTINGS_TAB", Icon = "settings" }),
+    -- Tambahkan tab lain jika diperlukan
+}
+
+Window:SelectTab(1)
+
+-- --- Variabel dan Konfigurasi Awal ---
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
 local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
+local VirtualUser = game:GetService("VirtualUser")
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local playerGui = player:WaitForChild("PlayerGui", 5)
 
--- === Configuration defaults ===
-local config = {
-    Speed = 1500,
-    JumpCap = 1,
-    AirStrafeAcceleration = 187,
-    ApplyMode = "Not Optimized",
-    -- GUI on-screen default
-    ButtonWidth = 50,
-    ButtonHeight = 50,
-    ShowBhopButton = false,
-    ShowBounceButton = false
+local currentSettings = {
+    Speed = "1500",
+    JumpCap = "1",
+    AirStrafeAcceleration = "187"
 }
 
--- Feature states
-local state = {
+local featureStates = {
     Bhop = false,
-    BhopMode = "Acceleration", -- "Acceleration","No Acceleration","Hold"
-    BhopAccelValue = -0.5,
+    BhopHold = false, -- Toggle untuk mode Bhop saat menekan tombol
     AutoCrouch = false,
-    AutoCrouchMode = "Air", -- "Air","Normal","Ground"
-    Bounce = false,
-    BounceHeight = 0,
-    BounceEpsilon = 0.1,
-    FullBright = false,
-    TimerDisplay = false
+    AutoCrouchMode = "Air", -- Default mode
+    -- Tambahkan state lain jika diperlukan
 }
 
--- Preserve original lighting to restore
-local originalLighting = {
-    Brightness = Lighting.Brightness,
-    FogEnd = Lighting.FogEnd,
-    Ambient = Lighting.Ambient,
-    OutdoorAmbient = Lighting.OutdoorAmbient,
-    GlobalShadows = Lighting.GlobalShadows
-}
+-- Variabel untuk Bounce
+local BOUNCE_ENABLED = false
+local BOUNCE_HEIGHT = 5
+local BOUNCE_EPSILON = 0.1
+local originalGameGravity = workspace.Gravity
+local character, humanoid, rootPart
 
--- ===== Helpers to find config tables in game's memory =====
-local requiredFields = {
-    Friction = true,
-    AirStrafeAcceleration = true,
-    JumpHeight = true,
-    RunDeaccel = true,
-    JumpSpeedMultiplier = true,
-    JumpCap = true,
-    SprintCap = true,
-    WalkSpeedMultiplier = true,
-    BhopEnabled = true,
-    Speed = true,
-    AirAcceleration = true,
-    RunAccel = true,
-    SprintAcceleration = true
-}
-
-local function hasAllFields(tbl)
-    if type(tbl) ~= "table" then return false end
-    for field, _ in pairs(requiredFields) do
-        if rawget(tbl, field) == nil then return false end
-    end
-    return true
-end
-
-local function getConfigTables()
-    local tables = {}
-    for _, obj in ipairs(getgc(true)) do
-        local ok, res = pcall(function()
-            if hasAllFields(obj) then return obj end
-        end)
-        if ok and res then table.insert(tables, res) end
-    end
-    return tables
-end
-
-local function applyToTables(callback)
-    local targets = getConfigTables()
-    if #targets == 0 then return end
-    if config.ApplyMode == "Optimized" then
-        task.spawn(function()
-            for i, tableObj in ipairs(targets) do
-                pcall(callback, tableObj)
-                if i % 3 == 0 then task.wait() end
-            end
-        end)
-    else
-        for _, tableObj in ipairs(targets) do
-            pcall(callback, tableObj)
-        end
-    end
-end
-
-local function applySettingField(field, value)
-    applyToTables(function(obj)
-        pcall(function()
-            obj[field] = value
-        end)
-    end)
-end
-
--- initial application
-applySettingField("Speed", config.Speed)
-applySettingField("JumpCap", config.JumpCap)
-applySettingField("AirStrafeAcceleration", config.AirStrafeAcceleration)
-
--- ===== FullBright =====
-local function setFullbright(on)
-    if on then
-        Lighting.Brightness = 3
-        Lighting.FogEnd = 100000
-        Lighting.Ambient = Color3.fromRGB(255,255,255)
-        Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
-        Lighting.GlobalShadows = false
-    else
-        Lighting.Brightness = originalLighting.Brightness
-        Lighting.FogEnd = originalLighting.FogEnd
-        Lighting.Ambient = originalLighting.Ambient
-        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
-        Lighting.GlobalShadows = originalLighting.GlobalShadows
-    end
-end
-
--- ===== Timer display (simple) =====
-local timerGui = nil
-local function createTimerGui()
-    if timerGui and timerGui.Parent then return end
-    if timerGui then timerGui:Destroy() end
-    timerGui = Instance.new("ScreenGui")
-    timerGui.Name = "EvadeTimerGui"
-    timerGui.IgnoreGuiInset = true
-    timerGui.ResetOnSpawn = false
-    timerGui.Parent = playerGui
-
-    local frame = Instance.new("Frame", timerGui)
-    frame.Name = "TimerFrame"
-    frame.Size = UDim2.new(0,180,0,36)
-    frame.Position = UDim2.new(0.5,-90,0.02,0)
-    frame.BackgroundTransparency = 0.35
-    frame.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    frame.BorderSizePixel = 0
-
-    local label = Instance.new("TextLabel", frame)
-    label.Name = "TimerLabel"
-    label.Size = UDim2.new(1,-8,1,-8)
-    label.Position = UDim2.new(0,4,0,4)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.fromRGB(255,255,255)
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 18
-    label.Text = "Timer: N/A"
-end
-
-local function destroyTimerGui()
-    if timerGui then
-        timerGui:Destroy()
-        timerGui = nil
-    end
-end
-
--- Optional: bind to a "Game Stats" object if present
-local function tryBindTimer(statsObj)
-    if not statsObj then return end
-    pcall(function()
-        if statsObj:GetAttribute("Timer") ~= nil then
-            if state.TimerDisplay then createTimerGui() end
-            statsObj:GetAttributeChangedSignal("Timer"):Connect(function()
-                if state.TimerDisplay and timerGui then
-                    local lbl = timerGui:FindFirstChild("TimerFrame") and timerGui.TimerFrame:FindFirstChild("TimerLabel")
-                    if lbl then lbl.Text = "Timer: "..tostring(statsObj:GetAttribute("Timer")) end
-                end
-            end)
-        end
-    end)
-end
-
--- try to find workspace.Game.Stats or similar without error
-pcall(function()
-    local g = workspace:FindFirstChild("Game") or workspace
-    local stats = g:FindFirstChild("Stats")
-    tryBindTimer(stats)
-end)
-
--- ===== Bounce (touch-based) =====
-local Debris = game:GetService("Debris")
-local remoteEvent = nil
-pcall(function() remoteEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("Character"):WaitForChild("PassCharacterInfo") end)
-
-local touchConnections = {}
-local function setupBounceOnTouch(character)
-    if not state.Bounce then return end
-    if not character then return end
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    if touchConnections[character] then
-        touchConnections[character]:Disconnect()
-        touchConnections[character] = nil
-    end
-
-    local conn = hrp.Touched:Connect(function(hit)
-        if not state.Bounce then return end
-        local hitSize = (hit and hit.Size) or Vector3.new(0,0,0)
-        local hitTop = hit.Position.Y + hitSize.Y/2
-        local playerBottom = hrp.Position.Y - hrp.Size.Y/2
-        if hitTop <= playerBottom + state.BounceEpsilon then return end
-        if remoteEvent then
-            pcall(function() remoteEvent:FireServer({}, {2}) end)
-        end
-        if state.BounceHeight and state.BounceHeight > 0 then
-            local bv = Instance.new("BodyVelocity")
-            bv.MaxForce = Vector3.new(0, math.huge, 0)
-            bv.Velocity = Vector3.new(0, state.BounceHeight, 0)
-            bv.Parent = hrp
-            Debris:AddItem(bv, 0.2)
-        end
-    end)
-    touchConnections[character] = conn
-
-    character.AncestryChanged:Connect(function()
-        if not character.Parent and touchConnections[character] then
-            touchConnections[character]:Disconnect()
-            touchConnections[character] = nil
-        end
-    end)
-end
-
-local function disableAllBounce()
-    for c, conn in pairs(touchConnections) do
-        if conn then conn:Disconnect() end
-    end
-    touchConnections = {}
-end
-
-player.CharacterAdded:Connect(function(ch)
-    task.wait(0.5)
-    if state.Bounce then setupBounceOnTouch(ch) end
-end)
-if player.Character and state.Bounce then setupBounceOnTouch(player.Character) end
-
--- ===== Bhop (friction tweak + auto-jump) =====
+-- Variabel global untuk toggle
 getgenv().autoJumpEnabled = false
-getgenv().bhopHoldActive = false
+getgenv().bhopMode = "Acceleration"
+getgenv().bhopAccelValue = -0.1
+getgenv().bounceEnabled = false -- Tambahkan variabel global untuk bounce
+getgenv().autoCrouchEnabled = false -- Tambahkan variabel global untuk auto crouch
 
-UserInputService.InputBegan:Connect(function(inp, gpe)
+-- --- Fungsi untuk membuat GUI Toggle (diambil dari bagian skrip yang relevan) ---
+local function createToggleGui(guiName, genvVarName, positionOffset)
+    local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui", 5)
+    if not playerGui then return nil, nil end
+
+    local existingGui = playerGui:FindFirstChild(guiName .. "Gui")
+    if existingGui then existingGui:Destroy() end
+
+    local toggleGui = Instance.new("ScreenGui")
+    toggleGui.Name = guiName .. "Gui"
+    toggleGui.IgnoreGuiInset = true
+    toggleGui.ResetOnSpawn = false
+    toggleGui.Enabled = false -- Akan diaktifkan oleh toggle utama
+    toggleGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 50, 0, 50)
+    frame.Position = UDim2.new(0.5, -50, 0.12 + (positionOffset or 0), 0) -- Sesuaikan offset posisi
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.35
+    frame.BorderSizePixel = 0
+    frame.Parent = toggleGui
+
+    local label = Instance.new("TextLabel")
+    label.Text = guiName
+    label.Size = UDim2.new(0.9, 0, 0.45, 0)
+    label.Position = UDim2.new(0.05, 0, 0.05, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Roboto
+    label.TextSize = 30
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextScaled = true
+    label.Parent = frame
+
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Name = "ToggleButton"
+    local state = getgenv()[genvVarName]
+    toggleButton.Text = state and "On" or "Off"
+    toggleButton.Size = UDim2.new(0.9, 0, 0.4, 0)
+    toggleButton.Position = UDim2.new(0.05, 0, 0.5, 0)
+    toggleButton.BackgroundColor3 = state and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleButton.Font = Enum.Font.Roboto
+    toggleButton.TextSize = 16
+    toggleButton.TextXAlignment = Enum.TextXAlignment.Center
+    toggleButton.TextYAlignment = Enum.TextYAlignment.Center
+    toggleButton.TextScaled = true
+    toggleButton.Parent = frame
+
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 4)
+    buttonCorner.Parent = toggleButton
+
+    toggleButton.MouseButton1Click:Connect(function()
+        getgenv()[genvVarName] = not getgenv()[genvVarName]
+        toggleButton.Text = getgenv()[genvVarName] and "On" or "Off"
+        toggleButton.BackgroundColor3 = getgenv()[genvVarName] and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+        -- Opsional: Sinkronkan dengan featureStates jika diperlukan
+        -- featureStates[guiName] = getgenv()[genvVarName]
+    end)
+
+    return toggleGui, toggleButton
+end
+-- --- Akhir Fungsi Pembuatan GUI ---
+
+-- --- Setup GUI Toggle Awal ---
+-- Buat GUI Toggle saat skrip dimuat, tetapi jangan aktifkan kecuali togglenya dinyalakan
+-- Bhop
+if getgenv().autoJumpEnabled then
+    bhopGui, bhopToggleBtn = createToggleGui("Bhop", "autoJumpEnabled", 0.12)
+    if bhopGui then bhopGui.Enabled = getgenv().autoJumpEnabled end
+end
+
+-- Auto Crouch
+if getgenv().autoCrouchEnabled then
+    autoCrouchGui, autoCrouchToggleBtn = createToggleGui("AutoCrouch", "autoCrouchEnabled", 0.36) -- Sesuaikan offset
+    if autoCrouchGui then autoCrouchGui.Enabled = getgenv().autoCrouchEnabled end
+end
+
+-- Bounce
+if getgenv().bounceEnabled then
+    bounceGui, bounceToggleBtn = createToggleGui("Bounce", "bounceEnabled", 0.24) -- Sesuaikan offset
+    if bounceGui then bounceGui.Enabled = getgenv().bounceEnabled end
+end
+
+
+-- --- Bagian UI WindUI ---
+-- --- Tab Player ---
+Tabs.Player:Section({ Title = "Modifications" })
+
+-- Fungsi bantuan untuk input yang divalidasi
+local function createValidatedInput(config)
+    return function(input)
+        local val = tonumber(input)
+        if not val then return end
+        if config.min and val < config.min then return end
+        if config.max and val > config.max then return end
+        currentSettings[config.field] = tostring(val)
+        -- applyToTables(function(obj) obj[config.field] = val end) -- Jika fungsi applyToTables digunakan
+    end
+end
+
+-- Input untuk Speed
+local SpeedInput = Tabs.Player:Input({
+    Title = "Set Speed",
+    Icon = "speedometer",
+    Placeholder = "Default 1500",
+    Value = currentSettings.Speed,
+    Callback = createValidatedInput({field = "Speed", min = 1450, max = 100008888})
+})
+
+-- Input untuk Jump Cap
+local JumpCapInput = Tabs.Player:Input({
+    Title = "Set Jump Cap",
+    Icon = "chevrons-up",
+    Placeholder = "Default 1",
+    Value = currentSettings.JumpCap,
+    Callback = createValidatedInput({field = "JumpCap", min = 0.1, max = 5088888})
+})
+
+-- Input untuk Strafe Acceleration
+local StrafeInput = Tabs.Player:Input({
+    Title = "Strafe Acceleration",
+    Icon = "wind",
+    Placeholder = "Default 187",
+    Value = currentSettings.AirStrafeAcceleration,
+    Callback = createValidatedInput({field = "AirStrafeAcceleration", min = 1, max = 1000888888})
+})
+
+-- Section untuk Bounce (di Tab Player)
+Tabs.Player:Section({ Title = "Bounce Settings", TextSize = 20 })
+
+-- Toggle untuk Bounce
+local BounceToggle = Tabs.Player:Toggle({
+    Title = "Bounce",
+    Value = false,
+    Callback = function(state)
+        getgenv().bounceEnabled = state -- Gunakan variabel global
+        BOUNCE_ENABLED = state
+        -- Perbarui GUI sesuai state
+        if bounceGui and bounceToggleBtn then
+            bounceGui.Enabled = state
+            bounceToggleBtn.Text = state and "On" or "Off"
+            bounceToggleBtn.BackgroundColor3 = state and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+        else
+            -- Jika GUI belum dibuat, buat sekarang
+            if state then
+                bounceGui, bounceToggleBtn = createToggleGui("Bounce", "bounceEnabled", 0.24) -- Offset posisi
+                if bounceGui then bounceGui.Enabled = state end
+            end
+        end
+    end
+})
+
+-- Input untuk Bounce Height
+local BounceHeightInput = Tabs.Player:Input({
+    Title = "Bounce Height",
+    Placeholder = "0",
+    Value = tostring(BOUNCE_HEIGHT),
+    Numeric = true,
+    Enabled = false,
+    Callback = function(value)
+        local num = tonumber(value)
+        if num then
+            BOUNCE_HEIGHT = math.max(0, num)
+        end
+    end
+})
+
+-- Input untuk Touch Detection Epsilon
+local EpsilonInput = Tabs.Player:Input({
+    Title = "Touch Detection Epsilon",
+    Placeholder = "0.1",
+    Value = tostring(BOUNCE_EPSILON),
+    Numeric = true,
+    Enabled = false,
+    Callback = function(value)
+        local num = tonumber(value)
+        if num then
+            BOUNCE_EPSILON = math.max(0, num)
+        end
+    end
+})
+
+-- Perbarui input agar enabled/disabled sesuai toggle bounce
+BounceToggle:Set(false) -- Set awal ke off
+BounceHeightInput:Set({ Enabled = false })
+EpsilonInput:Set({ Enabled = false })
+
+-- --- Tab Auto ---
+Tabs.Auto:Section({ Title = "Auto", TextSize = 40 })
+
+-- Toggle untuk Bhop
+local BhopToggle = Tabs.Auto:Toggle({
+    Title = "Bhop",
+    Value = false,
+    Callback = function(state)
+        getgenv().autoJumpEnabled = state
+        -- Perbarui GUI sesuai state
+        if bhopGui and bhopToggleBtn then
+            bhopGui.Enabled = state
+            bhopToggleBtn.Text = state and "On" or "Off"
+            bhopToggleBtn.BackgroundColor3 = state and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+        else
+            -- Jika GUI belum dibuat, buat sekarang
+            if state then
+                bhopGui, bhopToggleBtn = createToggleGui("Bhop", "autoJumpEnabled", 0.12) -- Offset posisi
+                if bhopGui then bhopGui.Enabled = state end
+            end
+        end
+    end
+})
+
+-- Dropdown untuk Bhop Mode
+Tabs.Auto:Dropdown({
+    Title = "Bhop Mode",
+    Values = {"Acceleration", "No Acceleration"},
+    Value = "Acceleration", -- Gunakan 'Value' bukan 'Default' untuk Dropdown
+    Callback = function(value)
+        getgenv().bhopMode = value
+    end
+})
+
+-- Input untuk Bhop Acceleration
+Tabs.Auto:Input({
+    Title = "Bhop Acceleration (Negative Only)",
+    Placeholder = "-0.5",
+    Numeric = true,
+    Callback = function(value)
+        if tostring(value):sub(1,1) == "-" then
+            local n = tonumber(value)
+            if n then getgenv().bhopAccelValue = n end
+        end
+    end
+})
+
+-- Toggle untuk Bhop Hold (opsional, sesuai skrip asli)
+local BhopHoldToggle = Tabs.Auto:Toggle({
+    Title = "Bhop (Jump button or Space)",
+    Value = false,
+    Callback = function(state)
+        featureStates.BhopHold = state
+        getgenv().bhopHoldActive = state
+    end
+})
+
+-- Toggle untuk Auto Crouch
+local AutoCrouchToggle = Tabs.Auto:Toggle({
+    Title = "Auto Crouch",
+    Icon = "arrow-down",
+    Value = false,
+    Callback = function(state)
+        getgenv().autoCrouchEnabled = state -- Gunakan variabel global
+        featureStates.AutoCrouch = state
+        -- Perbarui GUI sesuai state
+        if autoCrouchGui and autoCrouchToggleBtn then
+            autoCrouchGui.Enabled = state
+            autoCrouchToggleBtn.Text = state and "On" or "Off"
+            autoCrouchToggleBtn.BackgroundColor3 = state and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+        else
+            -- Jika GUI belum dibuat, buat sekarang
+            if state then
+                autoCrouchGui, autoCrouchToggleBtn = createToggleGui("AutoCrouch", "autoCrouchEnabled", 0.36) -- Offset posisi
+                if autoCrouchGui then autoCrouchGui.Enabled = state end
+            end
+        end
+    end
+})
+
+-- Dropdown untuk Auto Crouch Mode
+local AutoCrouchModeDropdown = Tabs.Auto:Dropdown({
+    Title = "Auto Crouch Mode",
+    Values = {"Air", "Normal", "Ground"},
+    Value = "Air",
+    Callback = function(value)
+        featureStates.AutoCrouchMode = value
+    end
+})
+
+-- --- Setup Loop dan Fungsi ---
+-- Loop Bhop
+task.spawn(function()
+    while true do
+        local friction = 5
+        local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
+        if isBhopActive and getgenv().bhopMode == "Acceleration" then
+            friction = getgenv().bhopAccelValue or -0.5
+        end
+        for _, t in pairs(getgc(true)) do
+            if type(t) == "table" and rawget(t, "Friction") then
+                t.Friction = friction
+            end
+        end
+        task.wait(0.15)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
+        if isBhopActive then
+            if character and humanoid then
+                local state = humanoid:GetState()
+                if state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Freefall then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+            if getgenv().bhopMode == "No Acceleration" then
+                task.wait(0.05)
+            else
+                task.wait()
+            end
+        else
+            task.wait()
+        end
+    end
+end)
+
+-- Loop Auto Crouch
+task.spawn(function()
+    local lastCrouchState = false
+    while true do
+        if getgenv().autoCrouchEnabled and character and humanoid then -- Gunakan variabel global
+            local currentState = humanoid.Sit
+            local shouldCrouch = false
+            if featureStates.AutoCrouchMode == "Air" then
+                local state = humanoid:GetState()
+                shouldCrouch = (state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping)
+            elseif featureStates.AutoCrouchMode == "Ground" then
+                shouldCrouch = humanoid:GetState() == Enum.HumanoidStateType.Landed
+            else -- "Normal" atau lainnya
+                shouldCrouch = true -- Crouch terus-menerus jika mode normal
+            end
+
+            if shouldCrouch and not currentState and not lastCrouchState then
+                -- Ganti fireKeybind dengan fungsi crouch yang sesuai
+                -- Misalnya, jika ada fungsi global atau remote untuk crouch:
+                -- game:GetService("ReplicatedStorage"):WaitForChild("CrouchRemote"):FireServer(shouldCrouch)
+                -- Atau jika bisa langsung:
+                humanoid.Sit = true
+                lastCrouchState = true
+            elseif not shouldCrouch and currentState and lastCrouchState then
+                -- game:GetService("ReplicatedStorage"):WaitForChild("CrouchRemote"):FireServer(shouldCrouch)
+                humanoid.Sit = false
+                lastCrouchState = false
+            elseif not shouldCrouch then
+                lastCrouchState = false -- Reset jika tidak seharusnya crouch
+            end
+        else
+            if lastCrouchState then
+                if character and humanoid and humanoid.Sit then
+                    -- game:GetService("ReplicatedStorage"):WaitForChild("CrouchRemote"):FireServer(false)
+                    humanoid.Sit = false
+                end
+                lastCrouchState = false
+            end
+        end
+        task.wait(0.1) -- Delay kecil untuk mengurangi beban CPU
+    end
+end)
+
+-- Setup Bounce
+local touchConnections = {}
+local function setupBounceOnTouch(char)
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    if touchConnections[char] then touchConnections[char]:Disconnect() end
+
+    local humanoidRootPart = char.HumanoidRootPart
+    local touchConnection = humanoidRootPart.Touched:Connect(function(hit)
+        if not getgenv().bounceEnabled or not hit then return end -- Gunakan variabel global
+        if hit.Parent:FindFirstChild("Humanoid") or hit.Parent.Parent:FindFirstChild("Humanoid") then return end
+
+        local playerBottom = humanoidRootPart.Position.Y - humanoidRootPart.Size.Y / 2
+        local playerTop = humanoidRootPart.Position.Y + humanoidRootPart.Size.Y / 2
+        local hitBottom = hit.Position.Y - hit.Size.Y / 2
+        local hitTop = hit.Position.Y + hit.Size.Y / 2
+
+        if hitTop <= playerBottom + BOUNCE_EPSILON then return end
+        if hitBottom >= playerTop - BOUNCE_EPSILON then return end
+
+        -- remoteEvent:FireServer({}, {2}) -- Ganti dengan event game yang sesuai jika ada
+
+        if BOUNCE_HEIGHT > 0 then
+            local bodyVel = Instance.new("BodyVelocity")
+            bodyVel.MaxForce = Vector3.new(0, math.huge, 0)
+            bodyVel.Velocity = Vector3.new(0, BOUNCE_HEIGHT, 0)
+            bodyVel.Parent = humanoidRootPart
+            game:GetService("Debris"):AddItem(bodyVel, 0.2)
+        end
+    end)
+
+    touchConnections[char] = touchConnection
+end
+
+local function disableBounce()
+    for char, connection in pairs(touchConnections) do
+        if connection then
+            connection:Disconnect()
+            touchConnections[char] = nil
+        end
+    end
+end
+
+-- Hubungkan ke karakter saat ini dan karakter yang baru
+if player.Character then
+    setupBounceOnTouch(player.Character)
+end
+player.CharacterAdded:Connect(setupBounceOnTouch)
+
+-- Setup Tombol Bhop Hold (Space dan Jump Button)
+-- Ganti 'player' dengan Players.LocalPlayer jika belum
+local UIS = game:GetService("UserInputService")
+UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    if inp.KeyCode == Enum.KeyCode.Space and state.BhopMode == "Hold" and state.Bhop then
+    if input.KeyCode == Enum.KeyCode.Space and featureStates.BhopHold then
         getgenv().bhopHoldActive = true
     end
 end)
-UserInputService.InputEnded:Connect(function(inp)
-    if inp.KeyCode == Enum.KeyCode.Space then
+UIS.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Space then
         getgenv().bhopHoldActive = false
     end
 end)
 
--- toggle Bhop via on-screen button or menu; support 'B' hotkey to toggle active bhop
-UserInputService.InputBegan:Connect(function(inp, gpe)
-    if gpe then return end
-    if inp.KeyCode == Enum.KeyCode.B and state.Bhop then
-        getgenv().autoJumpEnabled = not getgenv().autoJumpEnabled
-    end
-end)
+-- Setup untuk tombol lompat di mobile (jika ada)
+local function setupJumpButton()
+    local success, err = pcall(function()
+        local touchGui = player:WaitForChild("PlayerGui"):WaitForChild("TouchGui", 5)
+        if not touchGui then return end
+        local touchControlFrame = touchGui:WaitForChild("TouchControlFrame", 5)
+        if not touchControlFrame then return end
+        local jumpButton = touchControlFrame:WaitForChild("JumpButton", 5)
+        if not jumpButton then return end
 
--- friction application loop
-task.spawn(function()
-    while task.wait(0.15) do
-        local friction = 5
-        local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
-        if isBhopActive and state.BhopMode == "Acceleration" then
-            friction = state.BhopAccelValue or -0.5
-        end
-        for _, t in pairs(getgc(true)) do
-            if type(t) == "table" and rawget(t, "Friction") then
-                if state.BhopMode ~= "No Acceleration" then
-                    pcall(function() t.Friction = friction end)
-                end
+        jumpButton.MouseButton1Down:Connect(function()
+            if featureStates.BhopHold then
+                getgenv().bhopHoldActive = true
             end
-        end
+        end)
+        jumpButton.MouseButton1Up:Connect(function()
+            getgenv().bhopHoldActive = false
+        end)
+    end)
+    if not success then
+        warn("Failed to setup jump button: " .. tostring(err))
     end
+end
+
+setupJumpButton()
+player.CharacterAdded:Connect(setupJumpButton)
+
+-- --- Setup karakter ---
+player.CharacterAdded:Connect(function(char)
+    character = char
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    -- Setup ulang bounce jika karakter respawn
+    setupBounceOnTouch(char)
 end)
 
--- auto-jump coroutine
-task.spawn(function()
-    while task.wait() do
-        local active = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
-        if active and state.Bhop then
-            local character = player.Character
-            if character and character:FindFirstChild("Humanoid") then
-                local humanoid = character.Humanoid
-                if humanoid:GetState() ~= Enum.HumanoidStateType.Jumping and humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
-                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                end
-            end
-            if state.BhopMode == "No Acceleration" then task.wait(0.05) else task.wait() end
-        else
-            task.wait(0.05)
-        end
-    end
-end)
-
--- ===== Auto Crouch (fires keybind event) =====
-local function fireKeybind(down, key)
-    -- safe-fire to any in PlayerScripts temporary events if present
-    pcall(function()
-        local ps = player:FindFirstChild("PlayerScripts")
-        if ps then
-            local events = ps:FindFirstChild("Events") or ps:FindFirstChild("Temporary_Events") or ps:FindFirstChild("temporary_events")
-            if events then
-                local use = events:FindFirstChild("UseKeybind") or events:FindFirstChild("use_keybind") or events:FindFirstChild("Use_Keybind")
-                if use and use.Fire then
-                    use:Fire({ Down = down, Key = key })
-                end
-            end
-        end
-    end)
+if player.Character then
+    character = player.Character
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
 end
 
-local previousCrouchState = false
-local spamDown = true
-
-RunService.Heartbeat:Connect(function()
-    if not state.AutoCrouch then
-        if previousCrouchState then
-            fireKeybind(false, "Crouch")
-            previousCrouchState = false
-        end
-        return
-    end
-
-    local char = player.Character
-    if not char or not char:FindFirstChild("Humanoid") then return end
-    local humanoid = char.Humanoid
-    local mode = state.AutoCrouchMode
-
-    if mode == "Normal" then
-        fireKeybind(spamDown, "Crouch")
-        spamDown = not spamDown
-    else
-        local isAir = (humanoid.FloorMaterial == Enum.Material.Air) and (humanoid:GetState() ~= Enum.HumanoidStateType.Seated)
-        local shouldCrouch = (mode == "Air" and isAir) or (mode == "Ground" and not isAir)
-        if shouldCrouch ~= previousCrouchState then
-            fireKeybind(shouldCrouch, "Crouch")
-            previousCrouchState = shouldCrouch
-        end
-    end
-end)
-
--- ===== On-screen small draggable button utility =====
-local function makeDraggable(frame)
-    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
-
-    local function update(input)
-        local delta = input.Position - dragStart
-        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-
-    frame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            dragInput = input
-        end
-    end)
-
-    game:GetService("UserInputService").InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            update(input)
-        end
-    end)
-end
-
--- create or destroy small button
-local smallButtons = {
-    AutoCrouch = nil,
-    Bhop = nil,
-    Bounce = nil
-}
-
-local function createSmallButton(name, pos, getStateFunc, toggleFunc)
-    -- remove if exists
-    if smallButtons[name] and smallButtons[name].Parent then smallButtons[name]:Destroy() end
-    local sg = Instance.new("ScreenGui", playerGui)
-    sg.Name = "EvadeSmallButton_"..name
-    sg.ResetOnSpawn = false
-    sg.IgnoreGuiInset = true
-
-    local frame = Instance.new("Frame", sg)
-    frame.Name = name.."Frame"
-    frame.Size = UDim2.new(0, config.ButtonWidth, 0, config.ButtonHeight)
-    frame.Position = pos
-    frame.BackgroundTransparency = 0.25
-    frame.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    frame.BorderSizePixel = 0
-
-    local label = Instance.new("TextLabel", frame)
-    label.Size = UDim2.new(1,0,0.55,0)
-    label.Position = UDim2.new(0,0,0,0)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 14
-    label.TextColor3 = Color3.fromRGB(255,255,255)
-
-    local btn = Instance.new("TextButton", frame)
-    btn.Name = name.."Btn"
-    btn.Size = UDim2.new(0.9,0,0.35,0)
-    btn.Position = UDim2.new(0.05,0,0.55,0)
-    btn.Text = getStateFunc() and "On" or "Off"
-    btn.AutoButtonColor = true
-
-    local function refreshAppearance()
-        btn.Text = getStateFunc() and "On" or "Off"
-        if getStateFunc() then
-            btn.BackgroundColor3 = Color3.fromRGB(0,150,80)
-        else
-            btn.BackgroundColor3 = Color3.fromRGB(150,0,0)
-        end
-    end
-
-    btn.MouseButton1Click:Connect(function()
-        toggleFunc()
-        refreshAppearance()
-    end)
-
-    -- make it draggable
-    makeDraggable(frame)
-
-    smallButtons[name] = sg
-    refreshAppearance()
-    return sg
-end
-
-local function destroySmallButton(name)
-    if smallButtons[name] and smallButtons[name].Parent then
-        smallButtons[name]:Destroy()
-        smallButtons[name] = nil
-    end
-end
-
--- create Auto Crouch button by default
-createSmallButton("AutoCrouch", UDim2.new(0.5, -config.ButtonWidth - 8, 0.12, 0),
-    function() return state.AutoCrouch end,
-    function() state.AutoCrouch = not state.AutoCrouch end
-)
-
--- create Bhop and Bounce buttons only when config toggles are true
-local function refreshOnScreenButtons()
-    -- positions: left Bhop, center AutoCrouch, right Bounce
-    local leftPos = UDim2.new(0.5, -config.ButtonWidth*2 - 16, 0.12, 0)
-    local centerPos = UDim2.new(0.5, -config.ButtonWidth/2, 0.12, 0)
-    local rightPos = UDim2.new(0.5, config.ButtonWidth + 16, 0.12, 0)
-
-    -- Auto Crouch (ensure updated size)
-    if smallButtons.AutoCrouch and smallButtons.AutoCrouch.Parent then
-        smallButtons.AutoCrouch.AutoCrouchFrame.Size = UDim2.new(0, config.ButtonWidth, 0, config.ButtonHeight)
-        smallButtons.AutoCrouch.AutoCrouchFrame.Position = centerPos
-    end
-
-    if config.ShowBhopButton then
-        if not smallButtons.Bhop then
-            createSmallButton("Bhop", leftPos,
-                function() return state.Bhop end,
-                function() state.Bhop = not state.Bhop; if not state.Bhop then getgenv().autoJumpEnabled = false; getgenv().bhopHoldActive = false end end
-            )
-        else
-            smallButtons.Bhop.BhopFrame.Size = UDim2.new(0, config.ButtonWidth, 0, config.ButtonHeight)
-            smallButtons.Bhop.BhopFrame.Position = leftPos
-        end
-    else
-        destroySmallButton("Bhop")
-    end
-
-    if config.ShowBounceButton then
-        if not smallButtons.Bounce then
-            createSmallButton("Bounce", rightPos,
-                function() return state.Bounce end,
-                function() state.Bounce = not state.Bounce; if state.Bounce and player.Character then setupBounceOnTouch(player.Character) else disableAllBounce() end end
-            )
-        else
-            smallButtons.Bounce.BounceFrame.Size = UDim2.new(0, config.ButtonWidth, 0, config.ButtonHeight)
-            smallButtons.Bounce.BounceFrame.Position = rightPos
-        end
-    else
-        destroySmallButton("Bounce")
-    end
-end
-
--- initial call to set up based on defaults
-refreshOnScreenButtons()
-
--- ===== Minimal WindUI integration (if available) =====
-local WindUI = nil
-local success, lib = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-end)
-if success and lib then WindUI = lib end
-
-local Window = nil
-if WindUI then
-    Window = WindUI:CreateWindow({
-        Title = "Evade Trim Final",
-        Icon = "rocket",
-        Author = "Trim",
-        Folder = "EvadeTrimFinal",
-        Size = UDim2.fromOffset(520,360),
-        Theme = "Dark"
-    })
-    local Tabs = {}
-    Tabs.Player = Window:CreateTab("Player")
-    Tabs.Auto = Window:CreateTab("Auto")
-    Tabs.Visuals = Window:CreateTab("Visuals")
-
-    -- Player: movement settings
-    Tabs.Player:Section({ Title = "Movement" })
-    Tabs.Player:Input({
-        Title = "Set Speed",
-        Placeholder = "1500",
-        Value = tostring(config.Speed),
-        Callback = function(val)
-            local n = tonumber(val) if not n then return end
-            config.Speed = n
-            applySettingField("Speed", n)
-        end
-    })
-    Tabs.Player:Input({
-        Title = "Set Jump Cap",
-        Placeholder = "1",
-        Value = tostring(config.JumpCap),
-        Callback = function(val)
-            local n = tonumber(val) if not n then return end
-            config.JumpCap = n
-            applySettingField("JumpCap", n)
-        end
-    })
-    Tabs.Player:Input({
-        Title = "Strafe Acceleration",
-        Placeholder = "187",
-        Value = tostring(config.AirStrafeAcceleration),
-        Callback = function(val)
-            local n = tonumber(val) if not n then return end
-            config.AirStrafeAcceleration = n
-            applySettingField("AirStrafeAcceleration", n)
-        end
-    })
-    Tabs.Player:Dropdown({
-        Title = "Select Apply Mode",
-        Values = { "Not Optimized", "Optimized" },
-        Default = config.ApplyMode,
-        Callback = function(v) config.ApplyMode = v end
-    })
-
-    -- Auto: toggles + GUI settings
-    Tabs.Auto:Section({ Title = "Automatic Features" })
-    Tabs.Auto:Toggle({
-        Title = "Bhop (Menu Toggle)",
-        Value = state.Bhop,
-        Callback = function(v) state.Bhop = v; if not v then getgenv().autoJumpEnabled = false; getgenv().bhopHoldActive = false end end
-    })
-    Tabs.Auto:Dropdown({
-        Title = "Bhop Mode",
-        Values = { "Acceleration", "No Acceleration", "Hold" },
-        Value = state.BhopMode,
-        Callback = function(v) state.BhopMode = v end
-    })
-    Tabs.Auto:Input({
-        Title = "Bhop Acceleration (neg)",
-        Placeholder = "-0.5",
-        Value = tostring(state.BhopAccelValue),
-        Callback = function(v) local n = tonumber(v) if n then state.BhopAccelValue = n end end
-    })
-
-    Tabs.Auto:Toggle({
-        Title = "Auto Crouch",
-        Value = state.AutoCrouch,
-        Callback = function(v) state.AutoCrouch = v end
-    })
-    Tabs.Auto:Dropdown({
-        Title = "Auto Crouch Mode",
-        Values = { "Air", "Normal", "Ground" },
-        Value = state.AutoCrouchMode,
-        Callback = function(v) state.AutoCrouchMode = v end
-    })
-
-    Tabs.Auto:Section({ Title = "On-screen Buttons" })
-    Tabs.Auto:Toggle({
-        Title = "Show Bhop Button",
-        Value = config.ShowBhopButton,
-        Callback = function(v) config.ShowBhopButton = v refreshOnScreenButtons() end
-    })
-    Tabs.Auto:Toggle({
-        Title = "Show Bounce Button",
-        Value = config.ShowBounceButton,
-        Callback = function(v) config.ShowBounceButton = v refreshOnScreenButtons() end
-    })
-
-    Tabs.Auto:Section({ Title = "GUI Settings" })
-    Tabs.Auto:Input({
-        Title = "Button Width (px)",
-        Placeholder = "50",
-        Value = tostring(config.ButtonWidth),
-        Callback = function(v)
-            local n = tonumber(v); if not n then return end
-            config.ButtonWidth = math.clamp(n, 20, 300)
-            refreshOnScreenButtons()
-        end
-    })
-    Tabs.Auto:Input({
-        Title = "Button Height (px)",
-        Placeholder = "50",
-        Value = tostring(config.ButtonHeight),
-        Callback = function(v)
-            local n = tonumber(v); if not n then return end
-            config.ButtonHeight = math.clamp(n, 20, 300)
-            refreshOnScreenButtons()
-        end
-    })
-
-    -- Bounce settings in Player tab
-    Tabs.Player:Section({ Title = "Bounce" })
-    Tabs.Player:Toggle({
-        Title = "Enable Bounce",
-        Value = state.Bounce,
-        Callback = function(v) state.Bounce = v if v and player.Character then setupBounceOnTouch(player.Character) else disableAllBounce() end end
-    })
-    Tabs.Player:Input({
-        Title = "Bounce Height",
-        Placeholder = "0",
-        Value = tostring(state.BounceHeight),
-        Callback = function(v) local n = tonumber(v); if n then state.BounceHeight = n end end
-    })
-    Tabs.Player:Input({
-        Title = "Bounce Epsilon",
-        Placeholder = "0.1",
-        Value = tostring(state.BounceEpsilon),
-        Callback = function(v) local n = tonumber(v); if n then state.BounceEpsilon = n end end
-    })
-
-    -- Visuals
-    Tabs.Visuals:Section({ Title = "Visuals" })
-    Tabs.Visuals:Toggle({
-        Title = "FullBright",
-        Value = state.FullBright,
-        Callback = function(v) state.FullBright = v setFullbright(v) end
-    })
-    Tabs.Visuals:Toggle({
-        Title = "Timer Display",
-        Value = state.TimerDisplay,
-        Callback = function(v) state.TimerDisplay = v if v then createTimerGui() else destroyTimerGui() end end
-    })
-
-    Window:Open()
-end
-
--- If WindUI missing, create very basic menu fallback (not fancy) for critical toggles
-if not WindUI then
-    -- create a tiny settings GUI to toggle show buttons and sizes
-    local sg = Instance.new("ScreenGui", playerGui)
-    sg.Name = "EvadeTrimFallbackMenu"
-    sg.ResetOnSpawn = false
-    sg.IgnoreGuiInset = true
-
-    local frame = Instance.new("Frame", sg)
-    frame.Size = UDim2.new(0,260,0,200)
-    frame.Position = UDim2.new(0.02,0,0.02,0)
-    frame.BackgroundTransparency = 0.4
-    frame.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    frame.BorderSizePixel = 0
-
-    local function addLabel(text, y)
-        local lbl = Instance.new("TextLabel", frame)
-        lbl.Size = UDim2.new(1,-12,0,20)
-        lbl.Position = UDim2.new(0,6,0, y)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = text
-        lbl.TextColor3 = Color3.new(1,1,1)
-        lbl.Font = Enum.Font.SourceSans
-        lbl.TextSize = 14
-        return lbl
-    end
-
-    addLabel("Evade Trim Fallback Menu", 6)
-    addLabel("Use WindUI for full features", 26)
-
-    -- simple buttons for ShowBhopButton and ShowBounceButton
-    local bhopBtn = Instance.new("TextButton", frame)
-    bhopBtn.Size = UDim2.new(0.48, -6, 0, 30)
-    bhopBtn.Position = UDim2.new(0,6,0,60)
-    bhopBtn.Text = config.ShowBhopButton and "Hide Bhop Btn" or "Show Bhop Btn"
-    bhopBtn.MouseButton1Click:Connect(function()
-        config.ShowBhopButton = not config.ShowBhopButton
-        bhopBtn.Text = config.ShowBhopButton and "Hide Bhop Btn" or "Show Bhop Btn"
-        refreshOnScreenButtons()
-    end)
-
-    local bounceBtn = Instance.new("TextButton", frame)
-    bounceBtn.Size = UDim2.new(0.48, -6, 0, 30)
-    bounceBtn.Position = UDim2.new(0.5, 6, 0, 60)
-    bounceBtn.Text = config.ShowBounceButton and "Hide Bounce Btn" or "Show Bounce Btn"
-    bounceBtn.MouseButton1Click:Connect(function()
-        config.ShowBounceButton = not config.ShowBounceButton
-        bounceBtn.Text = config.ShowBounceButton and "Hide Bounce Btn" or "Show Bounce Btn"
-        refreshOnScreenButtons()
-    end)
-
-    -- size inputs (rudimentary)
-    local wInput = Instance.new("TextBox", frame)
-    wInput.Size = UDim2.new(0.48, -6, 0, 24)
-    wInput.Position = UDim2.new(0,6,0,100)
-    wInput.Text = tostring(config.ButtonWidth)
-    wInput.FocusLost:Connect(function(enter)
-        local n = tonumber(wInput.Text)
-        if n then config.ButtonWidth = math.clamp(n,20,300); refreshOnScreenButtons() end
-    end)
-    local hInput = Instance.new("TextBox", frame)
-    hInput.Size = UDim2.new(0.48, -6, 0, 24)
-    hInput.Position = UDim2.new(0.5,6,0,100)
-    hInput.Text = tostring(config.ButtonHeight)
-    hInput.FocusLost:Connect(function(enter)
-        local n = tonumber(hInput.Text)
-        if n then config.ButtonHeight = math.clamp(n,20,300); refreshOnScreenButtons() end
-    end)
-end
-
--- Cleanup on unload
-game:BindToClose(function()
-    disableAllBounce()
-    destroyTimerGui()
-    setFullbright(false)
-end)
-
--- End of script
---[[the part of loadstring prevent error]]
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua'))()
+-- --- Akhir Skrip ---
