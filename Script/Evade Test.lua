@@ -25,8 +25,8 @@ local Localization = WindUI:Localization({
     DefaultLanguage = "en",
     Translations = {
         ["en"] = {
-            ["SCRIPT_TITLE"] = "Movement Hub",
-            ["WELCOME"] = "Made by: Zen",
+            ["SCRIPT_TITLE"] = "Zen Hub",
+            ["WELCOME"] = "Made by: Pnsdg And Yomka",
             ["FEATURES"] = "Features",
             ["Player_TAB"] = "Player",
             ["AUTO_TAB"] = "Auto",
@@ -2618,7 +2618,12 @@ end
 
 
 local function rejoinServer()
-    TeleportService:TeleportToPlaceInstance(placeId, jobId)
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+
+local player = Players.LocalPlayer
+
+TeleportService:Teleport(game.PlaceId, player)
 end
 
     local FeatureSection = Window:Section({ Title = "loc:FEATURES", Opened = true })
@@ -2946,11 +2951,9 @@ local DistanceTeleportInput = Tabs.Main:Input({
         end
     end
 })
-Tabs.Main:Section({ Title = "Anti Nextbot Spawn", TextSize = 20 })
-Tabs.Main:Divider()
 
 featureStates.AntiNextbotSpawn = false
-featureStates.AntiNextbotSpawnType = "Non-NPC Spawn"
+featureStates.AntiNextbotSpawnType = "Spawn"
 featureStates.AntiNextbotSpawnDistance = 40
 featureStates.AntiNextbotTeleportDistance = 20
 
@@ -3142,7 +3145,7 @@ local function performAvoidance()
     
     local success = false
     
-    if featureStates.AntiNextbotSpawnType == "Non-NPC Spawn" then
+    if featureStates.AntiNextbotSpawnType == "Spawn" then
         success = teleportToSpawn()
     elseif featureStates.AntiNextbotSpawnType == "Player" then
         success = teleportToPlayer()
@@ -3251,8 +3254,8 @@ AntiNextbotSpawnToggle = Tabs.Main:Toggle({
 AntiNextbotSpawnTypeDropdown = Tabs.Main:Dropdown({
     Title = "Avoidance Mode",
     Desc = "Choose how to avoid Nextbot spawn",
-    Values = {"Non-NPC Spawn", "Player", "Distance"},
-    Value = "Non-NPC Spawn",
+    Values = {"Spawn", "Player", "Distance"},
+    Value = "Spawn",
     Callback = function(value)
         featureStates.AntiNextbotSpawnType = value
     end
@@ -5864,7 +5867,53 @@ AutoTicketFarmToggle = Tabs.Auto:Toggle({
     end
 })
 -- Utility Tab
-
+Tabs.Utility:Button({
+    Title = "Bypass Battle Pass Waiting",
+    Desc = "Skip all battle pass requirements and unlock everything instantly",
+    Callback = function()
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local Players = game:GetService("Players")
+        local LocalPlayer = Players.LocalPlayer
+        
+        LocalPlayer:SetAttribute("Tickets", 999999)
+        LocalPlayer:SetAttribute("Points", 999999)
+        LocalPlayer:SetAttribute("Tokens", 999999)
+        LocalPlayer:SetAttribute("AccumulatedTickets", 999999)
+        
+        local stats = workspace.Game.Stats
+        if stats:GetAttribute("ServerTick") then
+            stats:SetAttribute("ServerTick", stats:GetAttribute("ServerTick") + 9999999)
+        end
+        
+        local Events = ReplicatedStorage.Events.Data
+        pcall(function()
+            local battlepassData = Events.GetBattlepassData:InvokeServer()
+            if battlepassData and battlepassData.Event then
+                local eventModule = ReplicatedStorage.Info.Events.Types:FindFirstChild(battlepassData.Event)
+                if eventModule then
+                    local eventData = require(eventModule)
+                    for pageNumber, pageData in pairs(eventData.Rewards or {}) do
+                        for _, reward in pairs(pageData.Items or {}) do
+                            pcall(function()
+                                Events.Purchase:InvokeServer(reward.ID or reward.Name)
+                            end)
+                        end
+                    end
+                end
+            end
+        end)
+        
+        local originalPurchase = Events.Purchase
+        Events.Purchase = function(itemId)
+            pcall(function()
+                Events.AddToInventory:InvokeServer(itemId)
+            end)
+            return true
+        end
+        
+        print("Complete Battlepass Bypass Activated!")
+    end
+})
 FreeCamToggle = Tabs.Utility:Toggle({
     Title = "Free Cam UI",
     Desc = "Note: Sometimes it's may be glitchy so don't use it too often, I can't really fix it",
@@ -6484,7 +6533,14 @@ LowQualityButton = Tabs.Utility:Button({
         end
     end
 })
--- teleports tab
+Tabs.Utility:Button({
+    Title = "VIP CMD Macro",
+    Icon = "rbxassetid://107814281854748",
+    Callback = function() 
+        game:GetService("Players").LocalPlayer.PlayerGui.MacroManagerGUI.Enabled = 
+            not game:GetService("Players").LocalPlayer.PlayerGui.MacroManagerGUI.Enabled
+    end
+})-- teleports tab
 Tabs.Teleport:Section({ Title = "Teleports", TextSize = 20 })
 Tabs.Teleport:Divider()
 
@@ -6697,28 +6753,20 @@ Tabs.Teleport:Button({
     Icon = "shield",
     Callback = function()
         local function createSecurityPart()
-            local existingPart = workspace:FindFirstChild("SecurityLifetimePart")
+            local existingPart = workspace:FindFirstChild("SecurityPart")
             
             if existingPart then
                 return existingPart
             end
             
             local securityPart = Instance.new("Part")
-            securityPart.Name = "SecurityLifetimePart"
+            securityPart.Name = "SecurityPart"
             securityPart.Size = Vector3.new(10, 1, 10)
             securityPart.Position = Vector3.new(0, 500, 0)
             securityPart.Anchored = true
             securityPart.CanCollide = true
             securityPart.Material = Enum.Material.Plastic
-            securityPart.BrickColor = BrickColor.new("Bright red")
             securityPart.Parent = workspace
-
-            local texture = Instance.new("Texture")
-            texture.Texture = "rbxasset://textures/studs.png"
-            texture.Face = "Top"
-            texture.StudsPerTileU = 4
-            texture.StudsPerTileV = 4
-            texture.Parent = securityPart
             
             return securityPart
         end
@@ -7536,29 +7584,12 @@ end
 
 --[[the part of loadstring prevent error]]
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
-local function createSecurityPart()
-            local existingPart = workspace:FindFirstChild("SecurityLifetimePart")
-            
-            if existingPart then
-                return existingPart
-            end
-            
-            local securityPart = Instance.new("Part")
-            securityPart.Name = "SecurityLifetimePart"
-            securityPart.Size = Vector3.new(10, 1, 10)
-            securityPart.Position = Vector3.new(0, 500, 0)
-            securityPart.Anchored = true
-            securityPart.CanCollide = true
-            securityPart.Material = Enum.Material.Plastic
-            securityPart.BrickColor = BrickColor.new("Bright red")
-            securityPart.Parent = workspace
-
-            local texture = Instance.new("Texture")
-            texture.Texture = "rbxasset://textures/studs.png"
-            texture.Face = "Top"
-            texture.StudsPerTileU = 4
-            texture.StudsPerTileV = 4
-            texture.Parent = securityPart
-            
-            return securityPart
-        end
+if not workspace:FindFirstChild("SecurityPartlifetimelifetime") then
+    local SecurityPartlifetime = Instance.new("Part")
+    SecurityPartlifetime.Name = "SecurityPartlifetimelifetime"
+    SecurityPartlifetime.Size = Vector3.new(10, 1, 10)
+    SecurityPartlifetime.Position = Vector3.new(0, 500, 0)
+    SecurityPartlifetime.Anchored = true
+    SecurityPartlifetime.CanCollide = true
+    SecurityPartlifetime.Parent = workspace
+end
