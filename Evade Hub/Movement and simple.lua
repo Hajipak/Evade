@@ -1,595 +1,399 @@
-if getgenv().ZenHubEvadeExecuted then
-    return
-end
-getgenv().ZenHubEvadeExecuted = true
+-- Pastikan hanya satu instance skrip ini yang berjalan
+if getgenv().MovementHubExecuted then return end
+getgenv().MovementHubExecuted = true
 
 -- Load WindUI
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
--- Set WindUI properties
+-- Localization setup (Opsional, bisa disesuaikan)
+WindUI:Localization({
+    Enabled = true,
+    Prefix = "loc:",
+    DefaultLanguage = "en",
+    Translations = {
+        ["en"] = {
+            ["SCRIPT_TITLE"] = "Movement Hub",
+            ["WELCOME"] = "Made by: You",
+            ["Player_TAB"] = "Player",
+            ["AUTO_TAB"] = "Auto",
+            -- Tambahkan terjemahan lain jika diperlukan
+        }
+    }
+})
+
+-- Set Tema
 WindUI.TransparencyValue = 0.2
 WindUI:SetTheme("Dark")
 
--- Create WindUI window
+-- Buat Window
 local Window = WindUI:CreateWindow({
-    Title = "Zen Hub",
+    Title = "Movement Hub",
     Icon = "rocket",
-    Author = "Made by: Zen",
-    Folder = "GameHackUI",
-    Size = UDim2.fromOffset(580, 490),
+    Author = "Made by: You",
+    Folder = "MovementHub",
+    Size = UDim2.fromOffset(500, 400),
     Theme = "Dark",
     HidePanelBackground = false,
     Acrylic = false,
-    HideSearchBar = false,
-    SideBarWidth = 200
+    HideSearchBar = true,
+    SideBarWidth = 150
 })
 
--- Services
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Debris = game:GetService("Debris")
-local LocalPlayer = Players.LocalPlayer
+-- Akses atau buat Tab
+local Tabs = {}
+Tabs.Main = Window:Tab({ Title = "Main", Icon = "layout-grid" })
+Tabs.Player = Window:Tab({ Title = "Player", Icon = "user" })
+Tabs.Auto = Window:Tab({ Title = "Auto", Icon = "repeat-2" })
 
--- Player and Character References
-local player = LocalPlayer
-local character
-local humanoid
-local humanoidRootPart
-
--- Configuration and States (simplified for this script)
-getgenv().autoJumpEnabled = false
-getgenv().autoCrouchEnabled = false
-getgenv().bounceEnabled = false -- For the new toggle-specific version
-getgenv().bounceEnabledTabOnly = false -- For the tab-only version
-getgenv().bhopMode = "Acceleration"
-getgenv().bhopAccelValue = -5
-getgenv().autoCrouchMode = "normal" -- Options: "air", "normal", "ground"
-getgenv().crouchConnection = nil
-getgenv().touchConnections = {}
-getgenv().BOUNCE_HEIGHT = 0
-getgenv().BOUNCE_EPSILON = 0.1
-local featureStates = {
-    StrafeAcceleration = 5,
-    JumpCap = 1,
+-- --- Variabel dan Konfigurasi ---
+local currentSettings = {
     Speed = 1500,
-    Bhop = false,
-    AutoCrouch = false,
-    Bounce = false,
-    BounceTabOnly = false -- State for tab-only version
+    JumpCap = 1,
+    AirStrafeAcceleration = 187
 }
 
--- Toggle GUI Creation Function (from Evade structure)
-local function createToggleGui(title, varName, initialXScale, initialYScale)
-    initialXScale = initialXScale or 0.1
-    initialYScale = initialYScale or 0.1
+local getgenv = getgenv or function() return {} end
 
-    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 5)
-    if not playerGui then return end
+-- Variabel untuk Bhop
+getgenv().autoJumpEnabled = false
+getgenv().bhopMode = "Acceleration"
+getgenv().bhopAccelValue = -0.5
 
-    local gui = Instance.new("ScreenGui")
-    gui.Name = title .. "Gui"
-    gui.ResetOnSpawn = false
-    gui.Parent = playerGui
+-- Variabel untuk Bounce
+local BOUNCE_HEIGHT = 0
+local BOUNCE_EPSILON = 0.1
+local BOUNCE_ENABLED = false
+local touchConnections = {}
 
-    local frame = Instance.new("Frame", gui)
-    frame.Name = "MainFrame"
-    frame.Size = UDim2.new(initialXScale, 0, initialYScale, 0)
-    frame.Position = UDim2.new(initialXScale, 0, 0.5, 0) -- Example position
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    frame.BorderSizePixel = 2
-    frame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    frame.Active = true
-    frame.Draggable = true
+-- --- Services ---
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local workspace = game:GetService("Workspace")
+local VirtualUser = game:GetService("VirtualUser") -- Untuk Anti-AFK
 
-    local titleText = Instance.new("TextLabel", frame)
-    titleText.Name = "Title"
-    titleText.Size = UDim2.new(1, 0, 0.3, 0)
-    titleText.Position = UDim2.new(0, 0, 0, 0)
-    titleText.BackgroundTransparency = 1
-    titleText.Text = title
-    titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleText.Font = Enum.Font.Roboto
-    titleText.TextSize = 14
-    titleText.TextXAlignment = Enum.TextXAlignment.Center
-    titleText.TextYAlignment = Enum.TextYAlignment.Center
+local player = Players.LocalPlayer
+if not player then
+    Players.PlayerAdded:Wait()
+    player = Players.LocalPlayer
+end
 
-    local toggleBtn = Instance.new("TextButton", frame)
-    toggleBtn.Name = "ToggleButton"
-    toggleBtn.Size = UDim2.new(0.9, 0, 0.55, 0)
-    toggleBtn.Position = UDim2.new(0.05, 0, 0.35, 0)
-    toggleBtn.BackgroundColor3 = getgenv()[varName] and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(0, 0, 0)
-    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.Font = Enum.Font.Roboto
-    toggleBtn.TextSize = 20
-    toggleBtn.TextXAlignment = Enum.TextXAlignment.Center
-    toggleBtn.TextYAlignment = Enum.TextYAlignment.Center
-    toggleBtn.Text = getgenv()[varName] and "On" or "Off"
+-- --- Fungsi Pendukung untuk Bounce ---
+local function setupBounceOnTouch(character)
+    if not BOUNCE_ENABLED then return end
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    if not humanoidRootPart then return end -- Pastikan HumanoidRootPart ada
 
-    local buttonCorner = Instance.new("UICorner", toggleBtn)
-    buttonCorner.CornerRadius = UDim.new(0, 4)
+    -- Hapus koneksi lama jika ada
+    if touchConnections[character] then
+        touchConnections[character]:Disconnect()
+        touchConnections[character] = nil
+    end
 
-    local uiToggledViaUI = false
+    local touchConnection
+    touchConnection = humanoidRootPart.Touched:Connect(function(hit)
+        if not BOUNCE_ENABLED or not character or not character:FindFirstChild("HumanoidRootPart") then
+            if touchConnection then touchConnection:Disconnect() end
+            return
+        end
 
-    toggleBtn.MouseButton1Click:Connect(function()
-        getgenv()[varName] = not getgenv()[varName]
-        uiToggledViaUI = true
-        toggleBtn.Text = getgenv()[varName] and "On" or "Off"
-        toggleBtn.BackgroundColor3 = getgenv()[varName] and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(0, 0, 0)
-        gui.Enabled = true -- Ensure GUI stays visible when toggled via UI
+        -- Pastikan menyentuh bagian yang tidak tembus (CanCollide = true) dan bukan bagian dari karakter sendiri
+        if hit and hit.CanCollide and hit.Parent ~= character then
+            local magnitude = character.HumanoidRootPart.Velocity.Magnitude
+            local velocity = character.HumanoidRootPart.CFrame:VectorToWorldSpace(Vector3.new(0, BOUNCE_HEIGHT, 0))
+            local rayParams = RaycastParams.new()
+            rayParams.FilterDescendantsInstances = {character}
+            rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+            local rayResult = workspace:Raycast(hit.Position, -hit.Normal * BOUNCE_EPSILON, rayParams)
 
-        -- Update featureStates
-        if varName == "autoJumpEnabled" then
-            featureStates.Bhop = getgenv()[varName]
-        elseif varName == "autoCrouchEnabled" then
-            featureStates.AutoCrouch = getgenv()[varName]
-        elseif varName == "bounceEnabled" then
-            featureStates.Bounce = getgenv()[varName]
+            if magnitude > 1 and rayResult then
+                character.HumanoidRootPart.Velocity = velocity
+            end
         end
     end)
 
-    return gui, toggleBtn
+    touchConnections[character] = touchConnection
 end
 
--- --- Movement Hub UI Setup ---
-local function setupMovementHub()
-    if not Tabs or not Tabs.Auto or not Tabs.Player then
-        warn("Tabs.Auto or Tabs.Player not found. Cannot setup Movement Hub.")
-        return
+local function disableBounce()
+    BOUNCE_ENABLED = false
+    for char, connection in pairs(touchConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    touchConnections = {}
+end
+
+-- --- Fungsi untuk Bhop ---
+local function startBhop()
+    -- Implementasi Bhop berdasarkan mode
+    local UIS = game:GetService("UserInputService")
+    local heartbeatConnection
+
+    local function onJumpRequest()
+        if player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.Jump = true
+        end
     end
 
-local Tabs = {
-    Main = FeatureSection:Tab({ Title = "Main", Icon = "layout-grid" }),
-    Player = FeatureSection:Tab({ Title = "Player", Icon = "user" }),
-    Auto = FeatureSection:Tab({ Title = "Auto", Icon = "repeat-2" }),
-    Visuals = FeatureSection:Tab({ Title = "Visuals", Icon = "camera" }),
-    ESP = FeatureSection:Tab({ Title = "ESP", Icon = "eye" }),
-    Utility = FeatureSection:Tab({ Title = "Utility", Icon = "wrench" }),
-    Teleport = FeatureSection:Tab({ Title = "Teleport", Icon = "navigation" }),
-    Settings = FeatureSection:Tab({ Title = "Settings", Icon = "settings" })
-}
+    if UIS:IsKeyDown(Enum.KeyCode.Space) then
+        onJumpRequest()
+    end
 
-    -- Settings for GUI Toggle Sizes
-    local bhopToggleXSize = 0.1
-    local bhopToggleYSize = 0.1
-    local autoCrouchToggleXSize = 0.1
-    local autoCrouchToggleYSize = 0.1
-    local bounceUIGuiToggleXSize = 0.1
-    local bounceUIGuiToggleYSize = 0.1
+    heartbeatConnection = RunService.Heartbeat:Connect(function()
+        if getgenv().autoJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then
+                player.Character.Humanoid.Jump = true
+            end
+        end
+    end)
 
-    -- Main Movement Section
-    Tabs.Auto:Section({ Title = "Movement Hub", TextSize = 40 })
+    -- Simpan koneksi agar bisa dihentikan
+    getgenv().bhopHeartbeatConnection = heartbeatConnection
 
-    -- Strafe Acceleration Input
-    local StrafeInput = Tabs.Auto:Input({
-        Title = "Strafe Acceleration",
-        Icon = "wind", -- Menggunakan ikon jika tersedia
-        Placeholder = "Default 5",
-        Value = tostring(featureStates.StrafeAcceleration),
-        Numeric = true, -- Pastikan hanya angka yang bisa dimasukkan
-        Callback = function(value)
-            local num = tonumber(value)
-            if num then
-                featureStates.StrafeAcceleration = num
-                -- Jika ada fungsi atau variabel lain yang perlu diupdate, lakukan di sini
-            end
+    -- Koneksi untuk tombol ditekan (bisa digunakan untuk mode tertentu)
+    UIS.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.Space and getgenv().autoJumpEnabled then
+            onJumpRequest()
         end
-    }):Set(tostring(featureStates.StrafeAcceleration)) -- Set nilai awal
-
-    -- Jump Cap Input
-    local JumpCapInput = Tabs.Auto:Input({
-        Title = "Jump Cap",
-        Icon = "chevrons-up", -- Menggunakan ikon jika tersedia
-        Placeholder = "Default 1",
-        Value = tostring(featureStates.JumpCap),
-        Numeric = true,
-        Callback = function(value)
-            local num = tonumber(value)
-            if num and num > 0 then -- Pastikan nilai positif
-                featureStates.JumpCap = num
-                -- Jika ada fungsi atau variabel lain yang perlu diupdate, lakukan di sini
-            end
-        end
-    }):Set(tostring(featureStates.JumpCap))
-
-    -- Speed Input
-    local SpeedInput = Tabs.Auto:Input({
-        Title = "Speed",
-        Icon = "speedometer", -- Menggunakan ikon jika tersedia
-        Placeholder = "Default 1500",
-        Value = tostring(featureStates.Speed),
-        Numeric = true,
-        Callback = function(value)
-            local num = tonumber(value)
-            if num and num >= 10 then -- Pastikan nilai minimal 10
-                featureStates.Speed = num
-                -- Jika ada fungsi atau variabel lain yang perlu diupdate, lakukan di sini
-            end
-        end
-    }):Set(tostring(featureStates.Speed))
-
-    -- Bhop Setup
-    local bhopGui, bhopToggleBtn = createToggleGui("Bhop", "autoJumpEnabled", bhopToggleXSize, bhopToggleYSize)
-    local bhopToggle = Tabs.Auto:Toggle({
-        Title = "Bhop (UI Toggle)",
-        Value = getgenv().autoJumpEnabled,
-        Callback = function(state)
-            getgenv().autoJumpEnabled = state
-            if bhopGui and bhopToggleBtn then
-                bhopGui.Enabled = (state and uiToggledViaUI) -- Show UI if toggled on via UI or mobile
-                bhopToggleBtn.Text = state and "On" or "Off"
-                bhopToggleBtn.BackgroundColor3 = state and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(0, 0, 0)
-            end
-            featureStates.Bhop = state
-            if state then
-                -- Assuming Bhop activation logic is handled elsewhere (e.g., in RunService.Heartbeat)
-            else
-                -- Assuming Bhop deactivation logic is handled elsewhere
-            end
-        end
-    })
-    bhopToggle:Set(getgenv().autoJumpEnabled)
-
-    -- Bhop Mode Dropdown
-    Tabs.Auto:Dropdown({
-        Title = "Bhop Mode",
-        Values = {"Acceleration", "No Acceleration"},
-        Multi = false,
-        Default = "Acceleration",
-        Callback = function(value)
-            getgenv().bhopMode = value
-        end
-    })
-
-    -- Bhop Acceleration Input
-    Tabs.Auto:Input({
-        Title = "Bhop Acceleration (Negative Only)",
-        Placeholder = "-0.5",
-        Numeric = true,
-        Callback = function(value)
-            if tostring(value):sub(1, 1) == "-" then
-                local n = tonumber(value)
-                if n then getgenv().bhopAccelValue = n end
-            end
-        end
-    })
-
-    -- Auto Crouch Setup
-    local autoCrouchGui, autoCrouchToggleBtn = createToggleGui("Auto Crouch", "autoCrouchEnabled", autoCrouchToggleXSize, autoCrouchToggleYSize)
-    local autoCrouchToggle = Tabs.Auto:Toggle({
-        Title = "Auto Crouch (UI Toggle)",
-        Value = getgenv().autoCrouchEnabled,
-        Callback = function(state)
-            getgenv().autoCrouchEnabled = state
-            if autoCrouchGui and autoCrouchToggleBtn then
-                autoCrouchGui.Enabled = (state and uiToggledViaUI)
-                autoCrouchToggleBtn.Text = state and "On" or "Off"
-                autoCrouchToggleBtn.BackgroundColor3 = state and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(0, 0, 0)
-            end
-            featureStates.AutoCrouch = state
-            if state then
-                startAutoCrouch()
-            else
-                stopAutoCrouch()
-            end
-        end
-    })
-    autoCrouchToggle:Set(getgenv().autoCrouchEnabled)
-
-    -- Auto Crouch Mode Dropdown
-    Tabs.Auto:Dropdown({
-        Title = "Auto Crouch Mode",
-        Values = {"Air", "Normal", "Ground"},
-        Multi = false,
-        Default = "Normal",
-        Callback = function(value)
-            getgenv().autoCrouchMode = value:lower()
-        end
-    })
-
-    -- Bounce Setup (Version with Toggle UI)
-    local bounceUIGui, bounceUIGuiToggleBtn = createToggleGui("Bounce (UI)", "bounceEnabled", bounceUIGuiToggleXSize, bounceUIGuiToggleYSize)
-    local bounceUIGuiToggle = Tabs.Player:Toggle({
-        Title = "Bounce (UI Toggle)",
-        Value = getgenv().bounceEnabled,
-        Callback = function(state)
-            getgenv().bounceEnabled = state
-            if bounceUIGui and bounceUIGuiToggleBtn then
-                bounceUIGui.Enabled = (state and uiToggledViaUI)
-                bounceUIGuiToggleBtn.Text = state and "On" or "Off"
-                bounceUIGuiToggleBtn.BackgroundColor3 = state and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(0, 0, 0)
-            end
-            featureStates.Bounce = state
-            if state then
-                if player.Character then
-                    setupBounceOnTouch(player.Character)
-                end
-            else
-                disableBounce()
-            end
-        end
-    })
-    bounceUIGuiToggle:Set(getgenv().bounceEnabled)
-
-    -- Bounce Height Input (for UI Toggle version)
-    Tabs.Player:Input({
-        Title = "Bounce Height (UI Toggle)",
-        Placeholder = "0",
-        Value = tostring(getgenv().BOUNCE_HEIGHT),
-        Numeric = true,
-        Enabled = getgenv().bounceEnabled,
-        Callback = function(value)
-            local num = tonumber(value)
-            if num then
-                getgenv().BOUNCE_HEIGHT = math.max(0, num)
-            end
-        end
-    }):Set(tostring(getgenv().BOUNCE_HEIGHT))
-
-    -- Touch Epsilon Input (for UI Toggle version)
-    Tabs.Player:Input({
-        Title = "Touch Epsilon (UI Toggle)",
-        Placeholder = "0.1",
-        Value = tostring(getgenv().BOUNCE_EPSILON),
-        Numeric = true,
-        Enabled = getgenv().bounceEnabled,
-        Callback = function(value)
-            local num = tonumber(value)
-            if num then
-                getgenv().BOUNCE_EPSILON = math.max(0, num)
-            end
-        end
-    }):Set(tostring(getgenv().BOUNCE_EPSILON))
-
-    -- Bounce Setup (Version with Tab Toggle Only)
-    local bounceTabOnlyToggle = Tabs.Player:Toggle({
-        Title = "Bounce (Tab Only)",
-        Value = featureStates.BounceTabOnly,
-        Callback = function(state)
-            getgenv().bounceEnabledTabOnly = state -- Sync global var
-            featureStates.BounceTabOnly = state
-            if state then
-                if player.Character then
-                    setupBounceOnTouchTabOnly(player.Character) -- Use different setup function if needed, or same one
-                end
-            else
-                disableBounceTabOnly() -- Use different disable function if needed, or same one
-            end
-            -- Update inputs based on toggle state
-            bounceHeightTabInput:Set({ Enabled = state })
-            epsilonTabInput:Set({ Enabled = state })
-        end
-    })
-    bounceTabOnlyToggle:Set(featureStates.BounceTabOnly) -- Set initial state
-
-    -- Bounce Height Input (for Tab Only version)
-    local bounceHeightTabInput = Tabs.Player:Input({
-        Title = "Bounce Height (Tab Only)",
-        Placeholder = "0",
-        Value = tostring(getgenv().BOUNCE_HEIGHT),
-        Numeric = true,
-        Enabled = featureStates.BounceTabOnly, -- Enabled based on toggle state
-        Callback = function(value)
-            local num = tonumber(value)
-            if num then
-                getgenv().BOUNCE_HEIGHT = math.max(0, num)
-            end
-        end
-    }):Set(tostring(getgenv().BOUNCE_HEIGHT))
-
-    -- Touch Epsilon Input (for Tab Only version)
-    local epsilonTabInput = Tabs.Player:Input({
-        Title = "Touch Epsilon (Tab Only)",
-        Placeholder = "0.1",
-        Value = tostring(getgenv().BOUNCE_EPSILON),
-        Numeric = true,
-        Enabled = featureStates.BounceTabOnly, -- Enabled based on toggle state
-        Callback = function(value)
-            local num = tonumber(value)
-            if num then
-                getgenv().BOUNCE_EPSILON = math.max(0, num)
-            end
-        end
-    }):Set(tostring(getgenv().BOUNCE_EPSILON))
-
-
-    -- Settings for Toggle UI Sizes
-    Tabs.Settings:Section({ Title = "Movement Toggle UI Settings", TextSize = 20 })
-    Tabs.Settings:Slider({
-        Title = "Bhop Toggle Width",
-        Value = { Min = 0.05, Max = 0.3, Default = bhopToggleXSize, Step = 0.01 },
-        Callback = function(value)
-            bhopToggleXSize = value
-            if bhopGui and bhopGui:FindFirstChild("MainFrame") then
-                bhopGui.MainFrame.Size = UDim2.new(value, 0, bhopToggleYSize, 0)
-            end
-        end
-    })
-    Tabs.Settings:Slider({
-        Title = "Bhop Toggle Height",
-        Value = { Min = 0.05, Max = 0.3, Default = bhopToggleYSize, Step = 0.01 },
-        Callback = function(value)
-            bhopToggleYSize = value
-            if bhopGui and bhopGui:FindFirstChild("MainFrame") then
-                bhopGui.MainFrame.Size = UDim2.new(bhopToggleXSize, 0, value, 0)
-            end
-        end
-    })
-    Tabs.Settings:Slider({
-        Title = "Auto Crouch Toggle Width",
-        Value = { Min = 0.05, Max = 0.3, Default = autoCrouchToggleXSize, Step = 0.01 },
-        Callback = function(value)
-            autoCrouchToggleXSize = value
-            if autoCrouchGui and autoCrouchGui:FindFirstChild("MainFrame") then
-                autoCrouchGui.MainFrame.Size = UDim2.new(value, 0, autoCrouchToggleYSize, 0)
-            end
-        end
-    })
-    Tabs.Settings:Slider({
-        Title = "Auto Crouch Toggle Height",
-        Value = { Min = 0.05, Max = 0.3, Default = autoCrouchToggleYSize, Step = 0.01 },
-        Callback = function(value)
-            autoCrouchToggleYSize = value
-            if autoCrouchGui and autoCrouchGui:FindFirstChild("MainFrame") then
-                autoCrouchGui.MainFrame.Size = UDim2.new(autoCrouchToggleXSize, 0, value, 0)
-            end
-        end
-    })
-    Tabs.Settings:Slider({
-        Title = "Bounce (UI) Toggle Width",
-        Value = { Min = 0.05, Max = 0.3, Default = bounceUIGuiToggleXSize, Step = 0.01 },
-        Callback = function(value)
-            bounceUIGuiToggleXSize = value
-            if bounceUIGui and bounceUIGui:FindFirstChild("MainFrame") then
-                bounceUIGui.MainFrame.Size = UDim2.new(value, 0, bounceUIGuiToggleYSize, 0)
-            end
-        end
-    })
-    Tabs.Settings:Slider({
-        Title = "Bounce (UI) Toggle Height",
-        Value = { Min = 0.05, Max = 0.3, Default = bounceUIGuiToggleYSize, Step = 0.01 },
-        Callback = function(value)
-            bounceUIGuiToggleYSize = value
-            if bounceUIGui and bounceUIGui:FindFirstChild("MainFrame") then
-                bounceUIGui.MainFrame.Size = UDim2.new(bounceUIGuiToggleXSize, 0, value, 0)
-            end
-        end
-    })
-
+    end)
 end
 
--- --- Bhop Functionality ---
-local function setFriction(value)
-    if character and character:FindFirstChild("HumanoidRootPart") then
-        character.HumanoidRootPart.CustomPhysicalProperties = PhysicalProperties.new(
-            value, -- Custom friction
-            0.3, -- Custom elasticity
-            0.5, -- Custom density
-            0.1, -- Custom friction weight
-            0.1  -- Custom elasticity weight
-        )
+local function stopBhop()
+    getgenv().autoJumpEnabled = false
+    if getgenv().bhopHeartbeatConnection then
+        getgenv().bhopHeartbeatConnection:Disconnect()
+        getgenv().bhopHeartbeatConnection = nil
     end
 end
 
-RunService.Heartbeat:Connect(function()
-    if getgenv().autoJumpEnabled then
-        local friction = 5
-        if getgenv().bhopMode == "Acceleration" then
-            friction = getgenv().bhopAccelValue or -5
-        end
-        setFriction(friction)
-    else
-        setFriction(5) -- Default friction
-    end
-end)
+-- --- Fungsi untuk Auto Crouch (Termasuk dalam fitur gerak) ---
+local autoCrouchEnabled = false
+local autoCrouchMode = "normal" -- Default mode
+local autoCrouchConnection
 
--- --- Auto Crouch Functionality ---
 local function startAutoCrouch()
-    if getgenv().crouchConnection then getgenv().crouchConnection:Disconnect() end
-    getgenv().crouchConnection = RunService.Heartbeat:Connect(function()
-        if not character or not humanoid then return end
-        if not humanoidRootPart then return end
-
-        local currentState = humanoid:GetState()
-        local isCrouching = currentState == Enum.HumanoidStateType.Climbing or
-                           currentState == Enum.HumanoidStateType.Crouching or
-                           humanoid.Sit
-
-        if not isCrouching then
-            if getgenv().autoCrouchMode == "air" then
-                if currentState ~= Enum.HumanoidStateType.Freefall then return end
-            elseif getgenv().autoCrouchMode == "ground" then
-                if currentState ~= Enum.HumanoidStateType.Landed and
-                   currentState ~= Enum.HumanoidStateType.Running and
-                   currentState ~= Enum.HumanoidStateType.RunningNoPhysics then
-                    return
+    autoCrouchConnection = RunService.Heartbeat:Connect(function()
+        if autoCrouchEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+            local humanoid = player.Character.Humanoid
+            -- Tambahkan logika untuk mode crouch (normal, air, ground) jika diperlukan
+            if autoCrouchMode == "normal" or
+               (autoCrouchMode == "air" and humanoid:GetState() == Enum.HumanoidStateType.Freefall) or
+               (autoCrouchMode == "ground" and humanoid:GetState() == Enum.HumanoidStateType.Landed) then
+                -- Ganti dengan metode crouch yang sesuai, misalnya dengan mengubah HipHeight
+                if humanoid.Sit == false then
+                    humanoid.Sit = true
+                    task.wait(0.05) -- Jeda kecil untuk mencegah loop cepat
+                    humanoid.Sit = false
                 end
             end
-            humanoid:ChangeState(Enum.HumanoidStateType.Crouching)
         end
     end)
 end
 
 local function stopAutoCrouch()
-    if getgenv().crouchConnection then
-        getgenv().crouchConnection:Disconnect()
-        getgenv().crouchConnection = nil
-    end
-    -- Optionally, uncrouch the player when stopped
-    if character and humanoid then
-        humanoid:ChangeState(Enum.HumanoidStateType.Running)
+    autoCrouchEnabled = false
+    if autoCrouchConnection then
+        autoCrouchConnection:Disconnect()
+        autoCrouchConnection = nil
     end
 end
 
--- --- Bounce Functionality (for both UI and Tab versions) ---
--- Note: The core logic can be shared, the difference is in the toggle control.
-local function bouncePlayer()
-    if character and humanoidRootPart then
-        local newVelocity = humanoidRootPart.Velocity
-        humanoidRootPart.Velocity = Vector3.new(newVelocity.X, math.abs(newVelocity.Y) + getgenv().BOUNCE_HEIGHT, newVelocity.Z)
+-- --- Fungsi untuk menerapkan pengaturan ke tabel karakter ---
+local function applyToTables(callback)
+    -- Fungsi ini mencari tabel dalam karakter yang memiliki field yang relevan
+    -- dan menerapkan perubahan. Ini adalah inti dari bagaimana Evade bekerja.
+    local character = player.Character
+    if not character then return end
+
+    -- Cari tabel-tabel target (misalnya, Humanoid, Motor6D, dll.)
+    -- Ganti dengan logika pencarian tabel yang sesuai dari Evade jika diperlukan
+    local targets = {}
+    for _, obj in pairs(character:GetDescendants()) do
+        if typeof(obj) == "table" and obj.Speed and obj.JumpCap and obj.AirStrafeAcceleration then
+            table.insert(targets, obj)
+        end
     end
-end
 
-local function onTouched(hit)
-    -- Check either global variable depending on which version is active
-    if not (getgenv().bounceEnabled or getgenv().bounceEnabledTabOnly) then return end
-    local magnitude = humanoidRootPart.Velocity.Magnitude
-    if magnitude > getgenv().BOUNCE_EPSILON then -- Use epsilon for sensitivity
-        bouncePlayer()
-    end
-end
-
--- Shared setup and disable functions (assuming logic is the same)
-local function setupBounceOnTouch(char)
-    if not (getgenv().bounceEnabled or getgenv().bounceEnabledTabOnly) then return end -- Check either active version
-    if getgenv().touchConnections[char] then
-        getgenv().touchConnections[char]:Disconnect()
-    end
-    local humanoidRootPart = char:WaitForChild("HumanoidRootPart")
-    local connection = humanoidRootPart.Touched:Connect(onTouched)
-    getgenv().touchConnections[char] = connection
-end
-
-local function setupBounceOnTouchTabOnly(char)
-    -- For the tab-only version, we can reuse the same setup if the logic is identical
-    setupBounceOnTouch(char)
-end
-
-local function disableBounce()
-    -- Disable for the UI toggle version
-    for char, connection in pairs(getgenv().touchConnections) do
-        if connection then
-            connection:Disconnect()
-            getgenv().touchConnections[char] = nil
+    for i, tableObj in ipairs(targets) do
+        if tableObj and typeof(tableObj) == "table" then
+            pcall(callback, tableObj) -- Gunakan pcall untuk menghindari error jika field tidak ditemukan
         end
     end
 end
 
-local function disableBounceTabOnly()
-    -- Disable for the tab-only version - can reuse if logic is identical
-    disableBounce()
+local function applyStoredSettings()
+    local settings = {
+        {field = "Speed", value = tonumber(currentSettings.Speed)},
+        {field = "JumpCap", value = tonumber(currentSettings.JumpCap)},
+        {field = "AirStrafeAcceleration", value = tonumber(currentSettings.AirStrafeAcceleration)}
+    }
+
+    for _, setting in ipairs(settings) do
+        if setting.value then
+            applyToTables(function(obj)
+                obj[setting.field] = setting.value
+            end)
+        end
+    end
 end
 
-player.CharacterAdded:Connect(function(char)
-    -- Setup for the currently active version (or both if they can run simultaneously, though unlikely)
-    if getgenv().bounceEnabled then
-        setupBounceOnTouch(char)
+-- --- Bagian UI dengan WindUI ---
+-- Section untuk Movement Settings di Tab Player
+local MovementSection = Tabs.Player:Section({ Title = "Movement Settings", Opened = true })
+
+-- Speed Input
+local SpeedInput = MovementSection:Input({
+    Title = "Speed",
+    Placeholder = "e.g., 1500",
+    Value = tostring(currentSettings.Speed),
+    Numeric = true,
+    Callback = function(value)
+        local numValue = tonumber(value)
+        if numValue then
+            currentSettings.Speed = numValue
+            applyStoredSettings() -- Terapkan perubahan
+        else
+            warn("Invalid Speed value: " .. tostring(value))
+        end
     end
-    if getgenv().bounceEnabledTabOnly then
-        setupBounceOnTouchTabOnly(char)
+})
+
+-- Jump Cap Input
+local JumpCapInput = MovementSection:Input({
+    Title = "Jump Cap",
+    Placeholder = "e.g., 1",
+    Value = tostring(currentSettings.JumpCap),
+    Numeric = true,
+    Callback = function(value)
+        local numValue = tonumber(value)
+        if numValue then
+            currentSettings.JumpCap = numValue
+            applyStoredSettings() -- Terapkan perubahan
+        else
+            warn("Invalid Jump Cap value: " .. tostring(value))
+        end
+    end
+})
+
+-- Strafe Acceleration Input
+local StrafeInput = MovementSection:Input({
+    Title = "Strafe Acceleration",
+    Placeholder = "e.g., 187",
+    Value = tostring(currentSettings.AirStrafeAcceleration),
+    Numeric = true,
+    Callback = function(value)
+        local numValue = tonumber(value)
+        if numValue then
+            currentSettings.AirStrafeAcceleration = numValue
+            applyStoredSettings() -- Terapkan perubahan
+        else
+            warn("Invalid Strafe Acceleration value: " .. tostring(value))
+        end
+    end
+})
+
+-- Section untuk Auto Features di Tab Auto
+local AutoSection = Tabs.Auto:Section({ Title = "Auto Features", Opened = true })
+
+-- Bhop Toggle
+local BhopToggle = AutoSection:Toggle({
+    Title = "Bhop",
+    Value = false,
+    Callback = function(state)
+        getgenv().autoJumpEnabled = state
+        if state then
+            startBhop()
+        else
+            stopBhop()
+        end
+    end
+})
+
+-- Auto Crouch Toggle
+local AutoCrouchToggle = AutoSection:Toggle({
+    Title = "Auto Crouch",
+    Value = false,
+    Callback = function(state)
+        autoCrouchEnabled = state
+        if state then
+            startAutoCrouch()
+        else
+            stopAutoCrouch()
+        end
+    end
+})
+
+-- Section untuk Bounce di Tab Player
+local BounceSection = Tabs.Player:Section({ Title = "Bounce", Opened = true })
+
+-- Bounce Toggle
+local BounceToggle = BounceSection:Toggle({
+    Title = "Bounce",
+    Value = false,
+    Callback = function(state)
+        BOUNCE_ENABLED = state
+        if state then
+            if player.Character then
+                setupBounceOnTouch(player.Character)
+            end
+            -- Hubungkan ke event CharacterAdded jika bounce aktif
+            player.CharacterAdded:Connect(function(char)
+                setupBounceOnTouch(char)
+            end)
+        else
+            disableBounce()
+        end
+    end
+})
+
+-- Bounce Height Input
+local BounceHeightInput = BounceSection:Input({
+    Title = "Bounce Height",
+    Placeholder = "e.g., 50",
+    Value = tostring(BOUNCE_HEIGHT),
+    Numeric = true,
+    Callback = function(value)
+        local numValue = tonumber(value)
+        if numValue then
+            BOUNCE_HEIGHT = numValue
+            -- Tidak perlu menerapkan langsung, hanya simpan nilai
+        else
+            warn("Invalid Bounce Height value: " .. tostring(value))
+        end
+    end
+})
+
+-- Touch Epsilon Input
+local BounceEpsilonInput = BounceSection:Input({
+    Title = "Touch Epsilon",
+    Placeholder = "e.g., 0.1",
+    Value = tostring(BOUNCE_EPSILON),
+    Numeric = true,
+    Callback = function(value)
+        local numValue = tonumber(value)
+        if numValue and numValue >= 0 then -- Harus positif atau nol
+            BOUNCE_EPSILON = numValue
+        else
+            warn("Invalid Touch Epsilon value (must be >= 0): " .. tostring(value))
+        end
+    end
+})
+
+-- Panggil fungsi setup Bounce jika BounceToggle aktif saat karakter muncul
+if BOUNCE_ENABLED and player.Character then
+    setupBounceOnTouch(player.Character)
+end
+player.CharacterAdded:Connect(function(char)
+    if BOUNCE_ENABLED then
+        setupBounceOnTouch(char)
     end
 end)
 
--- Initialize Player Character for Bounce if already exists
-if player.Character then
-    if getgenv().bounceEnabled then
-        setupBounceOnTouch(player.Character)
-    end
-    if getgenv().bounceEnabledTabOnly then
-        setupBounceOnTouchTabOnly(player.Character)
-    end
-end
+-- Terapkan pengaturan awal saat skrip dimuat
+applyStoredSettings()
 
--- --- Initialize UI ---
-setupMovementHub()
+print("Movement Hub loaded with selected features (Speed, JumpCap, Strafe, Bhop, Bounce, AutoCrouch) and full UI implementation.")
