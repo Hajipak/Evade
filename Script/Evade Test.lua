@@ -6537,10 +6537,13 @@ Tabs.Utility:Button({
     Title = "VIP CMD Macro",
     Icon = "rbxassetid://107814281854748",
     Callback = function() 
-        game:GetService("Players").LocalPlayer.PlayerGui.MacroManagerGUI.Enabled = 
-            not game:GetService("Players").LocalPlayer.PlayerGui.MacroManagerGUI.Enabled
+        local coreGui = game:GetService("CoreGui")
+        if coreGui:FindFirstChild("MacroManagerGUI") then
+            coreGui.MacroManagerGUI.Enabled = not coreGui.MacroManagerGUI.Enabled
+        end
     end
-})-- teleports tab
+})
+-- teleports tab
 Tabs.Teleport:Section({ Title = "Teleports", TextSize = 20 })
 Tabs.Teleport:Divider()
 
