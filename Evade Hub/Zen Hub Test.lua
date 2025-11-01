@@ -6,7 +6,6 @@ local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footag
 WindUI.TransparencyValue = 0.2
 WindUI:SetTheme("Dark")
 
--- Create main window
 local Window = WindUI:CreateWindow({
     Title = "Movement Hub",
     Icon = "rocket",
@@ -26,25 +25,30 @@ local workspace = game.workspace
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Config file
-local configFileName = "evade_movement_config.txt"
+-- Config
+local configFileName = "movement_hub_config.txt"
 
 -- Default settings
 local currentSettings = {
     Speed = "1500",
     JumpCap = "1",
     StrafeAcceleration = "187",
-    ApplyMode = "-", -- belum dipilih
-    Bhop = false,
-    AutoCrouch = false,
-    Bounce = false,
+    ApplyMode = "-",
+    Bhop = "false",
+    AutoCrouch = "false",
+    Bounce = "false",
     BounceHeight = "0",
     BounceEpsilon = "0.1",
     AutoCrouchMode = "Air",
     BhopMode = "Acceleration",
     BhopAccelValue = "-0.5",
     GuiWidth = "200",
-    GuiHeight = "30"
+    GuiHeight = "30",
+    ShowBhopGui = "false",
+    ShowAutoCrouchGui = "false",
+    ShowBounceGui = "false",
+    LagSwitch = "false",
+    LagDuration = "0.5"
 }
 
 -- Load config
@@ -71,7 +75,7 @@ local function saveConfig()
     writefile(configFileName, HttpService:JSONEncode(data))
 end
 
--- Required fields for apply
+-- Required fields checker
 local requiredFields = {
     Friction = true,
     AirStrafeAcceleration = true,
@@ -121,7 +125,6 @@ local function applyToTables(callback)
     end
 end
 
--- Apply stored settings
 local function applyStoredSettings()
     if currentSettings.ApplyMode == "-" then return end
     applyToTables(function(obj)
@@ -131,7 +134,7 @@ local function applyStoredSettings()
     end)
 end
 
--- Bounce
+-- === BOUNCE ===
 local BOUNCE_ENABLED = currentSettings.Bounce == "true"
 local BOUNCE_HEIGHT = tonumber(currentSettings.BounceHeight) or 0
 local BOUNCE_EPSILON = tonumber(currentSettings.BounceEpsilon) or 0.1
@@ -170,7 +173,7 @@ if player.Character then
 end
 player.CharacterAdded:Connect(setupBounceOnTouch)
 
--- Auto Crouch
+-- === AUTO CROUCH ===
 local previousCrouchState = false
 local spamDown = true
 
@@ -204,7 +207,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Bhop
+-- === BHOP ===
 getgenv().autoJumpEnabled = currentSettings.Bhop == "true"
 getgenv().bhopMode = currentSettings.BhopMode
 getgenv().bhopAccelValue = tonumber(currentSettings.BhopAccelValue) or -0.5
@@ -247,7 +250,7 @@ task.spawn(function()
     end
 end)
 
--- Floating GUIs
+-- === DRAGGABLE FUNCTION ===
 local function makeDraggable(frame)
     local dragging, dragStart, startPos
     frame.InputBegan:Connect(function(input)
@@ -270,11 +273,13 @@ local function makeDraggable(frame)
     end)
 end
 
-local function createFloatingButton(name, varName, yOffset)
-    local guiName = name .. "Gui"
-    local gui = playerGui:FindFirstChild(guiName)
-    if gui then gui:Destroy() end
-    gui = Instance.new("ScreenGui")
+-- === FLOATING GUI CREATOR ===
+local function createFloatingGui(name, varName, yOffset)
+    local guiName = name:gsub(" ", "") .. "Gui"
+    local existing = playerGui:FindFirstChild(guiName)
+    if existing then existing:Destroy() end
+
+    local gui = Instance.new("ScreenGui")
     gui.Name = guiName
     gui.ResetOnSpawn = false
     gui.Parent = playerGui
@@ -315,8 +320,6 @@ local function createFloatingButton(name, varName, yOffset)
         btn.BackgroundColor3 = currentSettings[varName] == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 0, 0)
         if varName == "Bhop" then
             getgenv().autoJumpEnabled = currentSettings[varName] == "true"
-        elseif varName == "AutoCrouch" then
-            -- state already handled in heartbeat
         elseif varName == "Bounce" then
             BOUNCE_ENABLED = currentSettings[varName] == "true"
             if BOUNCE_ENABLED then
@@ -331,59 +334,70 @@ local function createFloatingButton(name, varName, yOffset)
     return gui
 end
 
-createFloatingButton("Bhop", "Bhop", 0)
-createFloatingButton("Auto Crouch", "AutoCrouch", 0.07)
-createFloatingButton("Bounce", "Bounce", 0.14)
+-- === LAG SWITCH ===
+getgenv().lagSwitchEnabled = currentSettings.LagSwitch == "true"
+getgenv().lagDuration = tonumber(currentSettings.LagDuration) or 0.5
 
--- Visuals
-local originalBrightness = Lighting.Brightness
-local originalFogEnd = Lighting.FogEnd
-local originalAtmospheres = {}
-for _, v in pairs(Lighting:GetDescendants()) do
-    if v:IsA("Atmosphere") then table.insert(originalAtmospheres, v) end
-end
+local function createLagSwitchGui()
+    local lagGui = playerGui:FindFirstChild("LagSwitchGui")
+    if lagGui then lagGui:Destroy() end
 
-local function startFullBright()
-    Lighting.Brightness = 2
-    Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
-    Lighting.Ambient = Color3.fromRGB(255,255,255)
-    Lighting.GlobalShadows = false
-end
+    lagGui = Instance.new("ScreenGui")
+    lagGui.Name = "LagSwitchGui"
+    lagGui.ResetOnSpawn = false
+    lagGui.Parent = playerGui
 
-local function stopFullBright()
-    Lighting.Brightness = originalBrightness
-    Lighting.OutdoorAmbient = originalOutdoorAmbient
-    Lighting.Ambient = originalAmbient
-    Lighting.GlobalShadows = originalGlobalShadows
-end
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 180, 0, 60)
+    frame.Position = UDim2.new(0.5, -90, 0.15, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 0
+    frame.Parent = lagGui
 
-local function startNoFog()
-    Lighting.FogEnd = 1e6
-    for _, v in pairs(Lighting:GetDescendants()) do
-        if v:IsA("Atmosphere") then v:Destroy() end
-    end
-end
+    makeDraggable(frame)
 
-local function stopNoFog()
-    Lighting.FogEnd = originalFogEnd
-    for _, atm in pairs(originalAtmospheres) do
-        if not atm.Parent then
-            local newAtm = Instance.new("Atmosphere")
-            for _, prop in pairs({"Density","Offset","Color","Decay","Glare","Haze"}) do
-                if atm[prop] then newAtm[prop] = atm[prop] end
+    local label = Instance.new("TextLabel")
+    label.Text = "Lag Switch"
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Roboto
+    label.TextSize = 14
+    label.Size = UDim2.new(0.6, 0, 0.5, 0)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.Parent = frame
+
+    local btn = Instance.new("TextButton")
+    btn.Text = "Trigger"
+    btn.BackgroundColor3 = Color3.fromRGB(0, 120, 80)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.Roboto
+    btn.TextSize = 14
+    btn.Size = UDim2.new(0.4, 0, 0.5, 0)
+    btn.Position = UDim2.new(0.6, 0, 0, 0)
+    btn.Parent = frame
+
+    btn.MouseButton1Click:Connect(function()
+        task.spawn(function()
+            local start = tick()
+            local duration = getgenv().lagDuration
+            while tick() - start < duration do
+                local a = math.random(1e6) * math.random(1e6)
+                a = a / math.random(1e4)
             end
-            newAtm.Parent = Lighting
-        end
-    end
+        end)
+    end)
+
+    return lagGui
 end
 
--- UI Tabs
+-- === UI SETUP ===
 local FeatureSection = Window:Section({ Title = "Movement", Opened = true })
-local MainTab = FeatureSection:Tab({ Title = "Movement", Icon = "user" })
-local VisualTab = FeatureSection:Tab({ Title = "Visuals", Icon = "camera" })
+local MainTab = FeatureSection:Tab({ Title = "Main", Icon = "user" })
+local VisualsTab = FeatureSection:Tab({ Title = "Visuals", Icon = "camera" })
 local SettingsTab = FeatureSection:Tab({ Title = "Settings", Icon = "settings" })
 
--- Movement Tab
+-- Main Tab
 MainTab:Section({ Title = "Core Movement" })
 MainTab:Input({
     Title = "Speed",
@@ -515,22 +529,68 @@ MainTab:Input({
     end
 })
 
+MainTab:Section({ Title = "Lag Switch" })
+MainTab:Toggle({
+    Title = "Enable Lag Switch",
+    Value = currentSettings.LagSwitch == "true",
+    Callback = function(v)
+        currentSettings.LagSwitch = tostring(v)
+        getgenv().lagSwitchEnabled = v
+        if v then
+            createLagSwitchGui()
+        else
+            local gui = playerGui:FindFirstChild("LagSwitchGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+MainTab:Input({
+    Title = "Lag Duration (seconds)",
+    Value = currentSettings.LagDuration,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num and num > 0 then
+            currentSettings.LagDuration = v
+            getgenv().lagDuration = num
+            saveConfig()
+        end
+    end
+})
+
 -- Visuals Tab
-VisualTab:Toggle({
+VisualsTab:Toggle({
     Title = "FullBright",
     Value = false,
     Callback = function(v)
-        if v then startFullBright() else stopFullBright() end
+        if v then
+            Lighting.Brightness = 2
+            Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+            Lighting.Ambient = Color3.fromRGB(255,255,255)
+            Lighting.GlobalShadows = false
+        else
+            Lighting.Brightness = 1
+            Lighting.OutdoorAmbient = Color3.fromRGB(0,0,0)
+            Lighting.Ambient = Color3.fromRGB(0,0,0)
+            Lighting.GlobalShadows = true
+        end
     end
 })
-VisualTab:Toggle({
+VisualsTab:Toggle({
     Title = "Remove Fog",
     Value = false,
     Callback = function(v)
-        if v then startNoFog() else stopNoFog() end
+        if v then
+            Lighting.FogEnd = 1e6
+            for _, atm in pairs(Lighting:GetDescendants()) do
+                if atm:IsA("Atmosphere") then atm:Destroy() end
+            end
+        else
+            Lighting.FogEnd = 100000
+        end
     end
 })
-VisualTab:Toggle({
+VisualsTab:Toggle({
     Title = "Timer Display",
     Value = false,
     Callback = function(v)
@@ -542,6 +602,65 @@ VisualTab:Toggle({
 })
 
 -- Settings Tab
+SettingsTab:Section({ Title = "Floating GUI Controls" })
+SettingsTab:Toggle({
+    Title = "Show Bhop Button",
+    Value = currentSettings.ShowBhopGui == "true",
+    Callback = function(v)
+        currentSettings.ShowBhopGui = tostring(v)
+        if v then
+            createFloatingGui("Bhop", "Bhop", 0)
+        else
+            local gui = playerGui:FindFirstChild("BhopGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+SettingsTab:Toggle({
+    Title = "Show Auto Crouch Button",
+    Value = currentSettings.ShowAutoCrouchGui == "true",
+    Callback = function(v)
+        currentSettings.ShowAutoCrouchGui = tostring(v)
+        if v then
+            createFloatingGui("Auto Crouch", "AutoCrouch", 0.07)
+        else
+            local gui = playerGui:FindFirstChild("AutoCrouchGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+SettingsTab:Toggle({
+    Title = "Show Bounce Button",
+    Value = currentSettings.ShowBounceGui == "true",
+    Callback = function(v)
+        currentSettings.ShowBounceGui = tostring(v)
+        if v then
+            createFloatingGui("Bounce", "Bounce", 0.14)
+        else
+            local gui = playerGui:FindFirstChild("BounceGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+SettingsTab:Toggle({
+    Title = "Show Lag Switch Button",
+    Value = currentSettings.ShowLagSwitchGui == "true",
+    Callback = function(v)
+        currentSettings.ShowLagSwitchGui = tostring(v)
+        if v then
+            createLagSwitchGui()
+        else
+            local gui = playerGui:FindFirstChild("LagSwitchGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+
+SettingsTab:Section({ Title = "GUI Size" })
 SettingsTab:Input({
     Title = "GUI Width",
     Value = currentSettings.GuiWidth,
@@ -550,10 +669,6 @@ SettingsTab:Input({
         if num and num > 0 then
             currentSettings.GuiWidth = v
             saveConfig()
-            -- Re-create floating buttons to apply new size
-            createFloatingButton("Bhop", "Bhop", 0)
-            createFloatingButton("Auto Crouch", "AutoCrouch", 0.07)
-            createFloatingButton("Bounce", "Bounce", 0.14)
         end
     end
 })
@@ -565,25 +680,11 @@ SettingsTab:Input({
         if num and num > 0 then
             currentSettings.GuiHeight = v
             saveConfig()
-            createFloatingButton("Bhop", "Bhop", 0)
-            createFloatingButton("Auto Crouch", "AutoCrouch", 0.07)
-            createFloatingButton("Bounce", "Bounce", 0.14)
         end
     end
 })
-SettingsTab:Button({
-    Title = "Reset GUI Size",
-    Callback = function()
-        currentSettings.GuiWidth = "200"
-        currentSettings.GuiHeight = "30"
-        saveConfig()
-        createFloatingButton("Bhop", "Bhop", 0)
-        createFloatingButton("Auto Crouch", "AutoCrouch", 0.07)
-        createFloatingButton("Bounce", "Bounce", 0.14)
-    end
-})
 
--- Respawn / Round logic
+-- Respawn logic
 local gameStatsPath = workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Stats")
 if gameStatsPath then
     gameStatsPath:GetAttributeChangedSignal("RoundStarted"):Connect(function()
@@ -598,10 +699,9 @@ player.CharacterAdded:Connect(function()
     applyStoredSettings()
 end)
 
--- External loadstring (Evade Test)
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
 
--- Notify
+-- Final notify
 WindUI:Notify({
     Title = "Movement Hub",
     Content = "Loaded successfully!",
