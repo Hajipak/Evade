@@ -26,7 +26,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- Config
-local configFileName = "movement_hub_config.txt"
+local configFileName = "movement_hub_gui_config.txt"
 
 -- Default settings
 local currentSettings = {
@@ -42,13 +42,14 @@ local currentSettings = {
     AutoCrouchMode = "Air",
     BhopMode = "Acceleration",
     BhopAccelValue = "-0.5",
-    GuiWidth = "200",
-    GuiHeight = "30",
+    LagSwitch = "false",
+    LagDuration = "0.5",
+    GuiWidth = "80",
+    GuiHeight = "50",
     ShowBhopGui = "false",
     ShowAutoCrouchGui = "false",
     ShowBounceGui = "false",
-    LagSwitch = "false",
-    LagDuration = "0.5"
+    ShowLagSwitchGui = "false"
 }
 
 -- Load config
@@ -67,12 +68,7 @@ end
 
 -- Save config
 local function saveConfig()
-    local data = {}
-    for k, v in pairs(currentSettings) do
-        local num = tonumber(v)
-        data[k] = num and num or v
-    end
-    writefile(configFileName, HttpService:JSONEncode(data))
+    writefile(configFileName, HttpService:JSONEncode(currentSettings))
 end
 
 -- Required fields checker
@@ -273,11 +269,15 @@ local function makeDraggable(frame)
     end)
 end
 
--- === FLOATING GUI CREATOR ===
-local function createFloatingGui(name, varName, yOffset)
-    local guiName = name:gsub(" ", "") .. "Gui"
-    local existing = playerGui:FindFirstChild(guiName)
-    if existing then existing:Destroy() end
+-- === CREATE FLOATING GUI ===
+local function createFloatingGui(guiName, titleText, buttonConfig)
+    local old = playerGui:FindFirstChild(guiName)
+    if old then old:Destroy() end
+
+    local w = tonumber(currentSettings.GuiWidth) or 80
+    local h = tonumber(currentSettings.GuiHeight) or 50
+    local headerHeight = 20
+    local buttonHeight = h - headerHeight
 
     local gui = Instance.new("ScreenGui")
     gui.Name = guiName
@@ -285,8 +285,8 @@ local function createFloatingGui(name, varName, yOffset)
     gui.Parent = playerGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, tonumber(currentSettings.GuiWidth) or 200, 0, tonumber(currentSettings.GuiHeight) or 30)
-    frame.Position = UDim2.new(0.5, -frame.Size.X.Offset/2, 0.1 + yOffset, 0)
+    frame.Size = UDim2.new(0, w, 0, h)
+    frame.Position = UDim2.new(0.5, -w/2, 0.1, 0)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     frame.BackgroundTransparency = 0.3
     frame.BorderSizePixel = 0
@@ -294,101 +294,32 @@ local function createFloatingGui(name, varName, yOffset)
 
     makeDraggable(frame)
 
-    local label = Instance.new("TextLabel")
-    label.Text = name
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Font = Enum.Font.Roboto
-    label.TextSize = 14
-    label.Size = UDim2.new(0.6, 0, 1, 0)
-    label.Position = UDim2.new(0, 0, 0, 0)
-    label.Parent = frame
+    -- Header (black)
+    local header = Instance.new("TextLabel")
+    header.Text = titleText
+    header.BackgroundTransparency = 0
+    header.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.Roboto
+    header.TextSize = 14
+    header.Size = UDim2.new(0, w, 0, headerHeight)
+    header.Position = UDim2.new(0, 0, 0, 0)
+    header.Parent = frame
 
+    -- Button
     local btn = Instance.new("TextButton")
-    btn.Text = currentSettings[varName] == "true" and "On" or "Off"
-    btn.BackgroundColor3 = currentSettings[varName] == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 0, 0)
+    btn.Text = buttonConfig.text
+    btn.BackgroundColor3 = buttonConfig.bgColor
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.Roboto
     btn.TextSize = 14
-    btn.Size = UDim2.new(0.4, 0, 1, 0)
-    btn.Position = UDim2.new(0.6, 0, 0, 0)
+    btn.Size = UDim2.new(0, w, 0, buttonHeight)
+    btn.Position = UDim2.new(0, 0, 0, headerHeight)
     btn.Parent = frame
 
-    btn.MouseButton1Click:Connect(function()
-        currentSettings[varName] = tostring(currentSettings[varName] ~= "true")
-        btn.Text = currentSettings[varName] == "true" and "On" or "Off"
-        btn.BackgroundColor3 = currentSettings[varName] == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 0, 0)
-        if varName == "Bhop" then
-            getgenv().autoJumpEnabled = currentSettings[varName] == "true"
-        elseif varName == "Bounce" then
-            BOUNCE_ENABLED = currentSettings[varName] == "true"
-            if BOUNCE_ENABLED then
-                if player.Character then setupBounceOnTouch(player.Character) end
-            else
-                disableBounce()
-            end
-        end
-        saveConfig()
-    end)
+    btn.MouseButton1Click:Connect(buttonConfig.onClick)
 
     return gui
-end
-
--- === LAG SWITCH ===
-getgenv().lagSwitchEnabled = currentSettings.LagSwitch == "true"
-getgenv().lagDuration = tonumber(currentSettings.LagDuration) or 0.5
-
-local function createLagSwitchGui()
-    local lagGui = playerGui:FindFirstChild("LagSwitchGui")
-    if lagGui then lagGui:Destroy() end
-
-    lagGui = Instance.new("ScreenGui")
-    lagGui.Name = "LagSwitchGui"
-    lagGui.ResetOnSpawn = false
-    lagGui.Parent = playerGui
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 180, 0, 60)
-    frame.Position = UDim2.new(0.5, -90, 0.15, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    frame.BackgroundTransparency = 0.3
-    frame.BorderSizePixel = 0
-    frame.Parent = lagGui
-
-    makeDraggable(frame)
-
-    local label = Instance.new("TextLabel")
-    label.Text = "Lag Switch"
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Font = Enum.Font.Roboto
-    label.TextSize = 14
-    label.Size = UDim2.new(0.6, 0, 0.5, 0)
-    label.Position = UDim2.new(0, 0, 0, 0)
-    label.Parent = frame
-
-    local btn = Instance.new("TextButton")
-    btn.Text = "Trigger"
-    btn.BackgroundColor3 = Color3.fromRGB(0, 120, 80)
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.Roboto
-    btn.TextSize = 14
-    btn.Size = UDim2.new(0.4, 0, 0.5, 0)
-    btn.Position = UDim2.new(0.6, 0, 0, 0)
-    btn.Parent = frame
-
-    btn.MouseButton1Click:Connect(function()
-        task.spawn(function()
-            local start = tick()
-            local duration = getgenv().lagDuration
-            while tick() - start < duration do
-                local a = math.random(1e6) * math.random(1e6)
-                a = a / math.random(1e4)
-            end
-        end)
-    end)
-
-    return lagGui
 end
 
 -- === UI SETUP ===
@@ -397,8 +328,10 @@ local MainTab = FeatureSection:Tab({ Title = "Main", Icon = "user" })
 local VisualsTab = FeatureSection:Tab({ Title = "Visuals", Icon = "camera" })
 local SettingsTab = FeatureSection:Tab({ Title = "Settings", Icon = "settings" })
 
--- Main Tab
-MainTab:Section({ Title = "Core Movement" })
+-- === MAIN TAB ===
+MainTab:Section({ Title = "Movement Features" })
+
+-- Core
 MainTab:Input({
     Title = "Speed",
     Value = currentSettings.Speed,
@@ -443,6 +376,7 @@ MainTab:Dropdown({
     end
 })
 
+-- Bhop
 MainTab:Section({ Title = "Bhop" })
 MainTab:Toggle({
     Title = "Enable Bhop",
@@ -476,6 +410,7 @@ MainTab:Input({
     end
 })
 
+-- Auto Crouch
 MainTab:Section({ Title = "Auto Crouch" })
 MainTab:Toggle({
     Title = "Enable Auto Crouch",
@@ -495,6 +430,7 @@ MainTab:Dropdown({
     end
 })
 
+-- Bounce
 MainTab:Section({ Title = "Bounce" })
 MainTab:Toggle({
     Title = "Enable Bounce",
@@ -529,6 +465,7 @@ MainTab:Input({
     end
 })
 
+-- Lag Switch
 MainTab:Section({ Title = "Lag Switch" })
 MainTab:Toggle({
     Title = "Enable Lag Switch",
@@ -536,12 +473,6 @@ MainTab:Toggle({
     Callback = function(v)
         currentSettings.LagSwitch = tostring(v)
         getgenv().lagSwitchEnabled = v
-        if v then
-            createLagSwitchGui()
-        else
-            local gui = playerGui:FindFirstChild("LagSwitchGui")
-            if gui then gui:Destroy() end
-        end
         saveConfig()
     end
 })
@@ -558,7 +489,125 @@ MainTab:Input({
     end
 })
 
--- Visuals Tab
+-- Floating GUI Controls
+MainTab:Section({ Title = "Floating GUI" })
+local BhopGuiToggle = MainTab:Toggle({
+    Title = "Show Bhop Button",
+    Value = currentSettings.ShowBhopGui == "true",
+    Callback = function(v)
+        currentSettings.ShowBhopGui = tostring(v)
+        if v then
+            createFloatingGui("BhopGui", "Bhop", {
+                text = getgenv().autoJumpEnabled and "On" or "Off",
+                bgColor = getgenv().autoJumpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0),
+                onClick = function()
+                    getgenv().autoJumpEnabled = not getgenv().autoJumpEnabled
+                    local btn = playerGui.BhopGui.Frame:FindFirstChildOfClass("TextButton")
+                    if btn then
+                        btn.Text = getgenv().autoJumpEnabled and "On" or "Off"
+                        btn.BackgroundColor3 = getgenv().autoJumpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0)
+                    end
+                    currentSettings.Bhop = tostring(getgenv().autoJumpEnabled)
+                    saveConfig()
+                end
+            })
+        else
+            local gui = playerGui:FindFirstChild("BhopGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+
+local AutoCrouchGuiToggle = MainTab:Toggle({
+    Title = "Show Auto Crouch Button",
+    Value = currentSettings.ShowAutoCrouchGui == "true",
+    Callback = function(v)
+        currentSettings.ShowAutoCrouchGui = tostring(v)
+        if v then
+            createFloatingGui("AutoCrouchGui", "Auto Crouch", {
+                text = currentSettings.AutoCrouch == "true" and "On" or "Off",
+                bgColor = currentSettings.AutoCrouch == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0),
+                onClick = function()
+                    currentSettings.AutoCrouch = currentSettings.AutoCrouch == "true" and "false" or "true"
+                    local btn = playerGui.AutoCrouchGui.Frame:FindFirstChildOfClass("TextButton")
+                    if btn then
+                        btn.Text = currentSettings.AutoCrouch == "true" and "On" or "Off"
+                        btn.BackgroundColor3 = currentSettings.AutoCrouch == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0)
+                    end
+                    saveConfig()
+                end
+            })
+        else
+            local gui = playerGui:FindFirstChild("AutoCrouchGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+
+local BounceGuiToggle = MainTab:Toggle({
+    Title = "Show Bounce Button",
+    Value = currentSettings.ShowBounceGui == "true",
+    Callback = function(v)
+        currentSettings.ShowBounceGui = tostring(v)
+        if v then
+            createFloatingGui("BounceGui", "Bounce", {
+                text = BOUNCE_ENABLED and "On" or "Off",
+                bgColor = BOUNCE_ENABLED and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0),
+                onClick = function()
+                    BOUNCE_ENABLED = not BOUNCE_ENABLED
+                    if BOUNCE_ENABLED then
+                        if player.Character then setupBounceOnTouch(player.Character) end
+                    else
+                        disableBounce()
+                    end
+                    currentSettings.Bounce = tostring(BOUNCE_ENABLED)
+                    local btn = playerGui.BounceGui.Frame:FindFirstChildOfClass("TextButton")
+                    if btn then
+                        btn.Text = BOUNCE_ENABLED and "On" or "Off"
+                        btn.BackgroundColor3 = BOUNCE_ENABLED and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0)
+                    end
+                    saveConfig()
+                end
+            })
+        else
+            local gui = playerGui:FindFirstChild("BounceGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+
+local LagSwitchGuiToggle = MainTab:Toggle({
+    Title = "Show Lag Switch Button",
+    Value = currentSettings.ShowLagSwitchGui == "true",
+    Callback = function(v)
+        currentSettings.ShowLagSwitchGui = tostring(v)
+        if v then
+            createFloatingGui("LagSwitchGui", "Lag Switch", {
+                text = "Trigger",
+                bgColor = Color3.fromRGB(0, 120, 80),
+                onClick = function()
+                    task.spawn(function()
+                        local start = tick()
+                        local duration = getgenv().lagDuration or 0.5
+                        while tick() - start < duration do
+                            local a = math.random(1e6) * math.random(1e6)
+                            a = a / math.random(1e4)
+                        end
+                    end)
+                end
+            })
+        else
+            local gui = playerGui:FindFirstChild("LagSwitchGui")
+            if gui then gui:Destroy() end
+        end
+        saveConfig()
+    end
+})
+
+-- === VISUALS TAB ===
 VisualsTab:Toggle({
     Title = "FullBright",
     Value = false,
@@ -601,66 +650,8 @@ VisualsTab:Toggle({
     end
 })
 
--- Settings Tab
-SettingsTab:Section({ Title = "Floating GUI Controls" })
-SettingsTab:Toggle({
-    Title = "Show Bhop Button",
-    Value = currentSettings.ShowBhopGui == "true",
-    Callback = function(v)
-        currentSettings.ShowBhopGui = tostring(v)
-        if v then
-            createFloatingGui("Bhop", "Bhop", 0)
-        else
-            local gui = playerGui:FindFirstChild("BhopGui")
-            if gui then gui:Destroy() end
-        end
-        saveConfig()
-    end
-})
-SettingsTab:Toggle({
-    Title = "Show Auto Crouch Button",
-    Value = currentSettings.ShowAutoCrouchGui == "true",
-    Callback = function(v)
-        currentSettings.ShowAutoCrouchGui = tostring(v)
-        if v then
-            createFloatingGui("Auto Crouch", "AutoCrouch", 0.07)
-        else
-            local gui = playerGui:FindFirstChild("AutoCrouchGui")
-            if gui then gui:Destroy() end
-        end
-        saveConfig()
-    end
-})
-SettingsTab:Toggle({
-    Title = "Show Bounce Button",
-    Value = currentSettings.ShowBounceGui == "true",
-    Callback = function(v)
-        currentSettings.ShowBounceGui = tostring(v)
-        if v then
-            createFloatingGui("Bounce", "Bounce", 0.14)
-        else
-            local gui = playerGui:FindFirstChild("BounceGui")
-            if gui then gui:Destroy() end
-        end
-        saveConfig()
-    end
-})
-SettingsTab:Toggle({
-    Title = "Show Lag Switch Button",
-    Value = currentSettings.ShowLagSwitchGui == "true",
-    Callback = function(v)
-        currentSettings.ShowLagSwitchGui = tostring(v)
-        if v then
-            createLagSwitchGui()
-        else
-            local gui = playerGui:FindFirstChild("LagSwitchGui")
-            if gui then gui:Destroy() end
-        end
-        saveConfig()
-    end
-})
-
-SettingsTab:Section({ Title = "GUI Size" })
+-- === SETTINGS TAB ===
+SettingsTab:Section({ Title = "Floating GUI Size" })
 SettingsTab:Input({
     Title = "GUI Width",
     Value = currentSettings.GuiWidth,
@@ -669,6 +660,11 @@ SettingsTab:Input({
         if num and num > 0 then
             currentSettings.GuiWidth = v
             saveConfig()
+            -- Re-apply active GUIs
+            if currentSettings.ShowBhopGui == "true" then BhopGuiToggle:Set(true) end
+            if currentSettings.ShowAutoCrouchGui == "true" then AutoCrouchGuiToggle:Set(true) end
+            if currentSettings.ShowBounceGui == "true" then BounceGuiToggle:Set(true) end
+            if currentSettings.ShowLagSwitchGui == "true" then LagSwitchGuiToggle:Set(true) end
         end
     end
 })
@@ -677,9 +673,13 @@ SettingsTab:Input({
     Value = currentSettings.GuiHeight,
     Callback = function(v)
         local num = tonumber(v)
-        if num and num > 0 then
+        if num and num >= 50 then
             currentSettings.GuiHeight = v
             saveConfig()
+            if currentSettings.ShowBhopGui == "true" then BhopGuiToggle:Set(true) end
+            if currentSettings.ShowAutoCrouchGui == "true" then AutoCrouchGuiToggle:Set(true) end
+            if currentSettings.ShowBounceGui == "true" then BounceGuiToggle:Set(true) end
+            if currentSettings.ShowLagSwitchGui == "true" then LagSwitchGuiToggle:Set(true) end
         end
     end
 })
