@@ -26,7 +26,7 @@ local Localization = WindUI:Localization({
     Translations = {
         ["en"] = {
             ["SCRIPT_TITLE"] = "Zen Hub",
-            ["WELCOME"] = "Made by: Pnsdg And Yomka",
+            ["WELCOME"] = "Made by: Zen",
             ["FEATURES"] = "Features",
             ["Player_TAB"] = "Player",
             ["AUTO_TAB"] = "Auto",
@@ -818,22 +818,6 @@ local currentSettings = {
     JumpCap = "1",
     AirStrafeAcceleration = "187"
 }
-local emoteList = {}
-
-local success, emotesFolder = pcall(function()
-    return game:GetService("ReplicatedStorage").Items.Emotes
-end)
-
-if success and typeof(emotesFolder) == "Instance" then
-    for _, emote in ipairs(emotesFolder:GetChildren()) do
-        if emote:IsA("ModuleScript") or emote:IsA("LocalScript") or emote:IsA("Script") then
-            table.insert(emoteList, emote.Name)
-        end
-    end
-end
-
-getgenv().SelectedEmote = nil
-getgenv().EmoteEnabled = false
 local appliedOnce = false
 local playerModelPresent = false
 local gameStatsPath = workspace:WaitForChild("Game"):WaitForChild("Stats")
@@ -1006,6 +990,15 @@ local ToggleTpwalk = false
 local TpwalkConnection
 getgenv().ticketfarm = false
 getgenv().moneyfarm = false
+if not featureStates.AntiNextbotDistance then
+    featureStates.AntiNextbotDistance = 50
+end
+
+local previousMoneyFarm = false
+local previousTicketFarm = false
+local previousAutoWin = false
+local farmsSuppressedByAntiNextbot = false
+local antiNextbotConnection = nil
 local jumpCount = 0
 local MAX_JUMPS = math.huge
 
@@ -2130,27 +2123,17 @@ local function stopAutoSelfRevive()
 end
 
 local function startAutoWin()
+    local securityPart = workspace:FindFirstChild("SecurityPart")
+    if not securityPart then
+        print("SecurityPart not found")
+        return
+    end
+    
     AutoWinConnection = RunService.Heartbeat:Connect(function()
         if character and rootPart then
-            if character:GetAttribute("Downed") then
-                ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
-                task.wait(0.5)
-            end
             if not character:GetAttribute("Downed") then
-                               local securityPart = Instance.new("Part")
-                securityPart.Name = "SecurityPartTemp"
-                securityPart.Size = Vector3.new(10, 1, 10)
-                securityPart.Position = Vector3.new(0, 500, 0)
-                securityPart.Anchored = true
-                securityPart.Transparency = 1
-                securityPart.CanCollide = true
-                securityPart.Parent = workspace
                 rootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
             end
-            local securityPart = workspace:FindFirstChild("SecurityPartTemp")
-    if securityPart then
-        securityPart:Destroy()
-    end
         end
     end)
 end
@@ -2161,8 +2144,13 @@ local function stopAutoWin()
         AutoWinConnection = nil
     end
 end
-
 local function startAutoMoneyFarm()
+    local securityPart = workspace:FindFirstChild("SecurityPart")
+    if not securityPart then
+        print("SecurityPart not found")
+        return
+    end
+    
     AutoMoneyFarmConnection = RunService.Heartbeat:Connect(function()
         if character and rootPart then
             local downedPlayerFound = false
@@ -2183,17 +2171,6 @@ local function startAutoMoneyFarm()
                 end
             end
             
-            local securityPart = workspace:FindFirstChild("SecurityPartTemp")
-            if not securityPart then
-                securityPart = Instance.new("Part")
-                securityPart.Name = "SecurityPartTemp"
-                securityPart.Size = Vector3.new(10, 1, 10)
-                securityPart.Position = Vector3.new(0, 500, 0)
-                securityPart.Anchored = true
-                securityPart.Transparency = 1
-                securityPart.CanCollide = true
-                securityPart.Parent = workspace
-            end
             if not downedPlayerFound then
                 rootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
             end
@@ -2205,11 +2182,6 @@ local function stopAutoMoneyFarm()
     if AutoMoneyFarmConnection then
         AutoMoneyFarmConnection:Disconnect()
         AutoMoneyFarmConnection = nil
-    end
-    
-    local securityPart = workspace:FindFirstChild("SecurityPartTemp")
-    if securityPart then
-        securityPart:Destroy()
     end
 end
 local autoWhistleHandle = nil
@@ -2906,17 +2878,126 @@ task.spawn(function()
 end)
 
 
-local AntiNextbotToggle = Tabs.Main:Toggle({
+ AntiNextbotToggle = Tabs.Main:Toggle({
     Title = "Anti-Nextbot",
-    Desc = "Automatically teleport away from nearby Nextbots",
+    Desc = "Automatically teleport away from nearby Nextbots (farms pause if too close)",
     Icon = "shield",
     Value = featureStates.AntiNextbot,
     Callback = function(state)
         featureStates.AntiNextbot = state
+        
+        if state then
+            antiNextbotConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                if not featureStates.AntiNextbot then return end
+                
+                local character = player.Character
+                local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+                if not humanoidRootPart then return end
+                local nearestDistance = math.huge
+                local nearestNextbot = nil
+                local playersFolder = workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players")
+                local npcsFolder = workspace:FindFirstChild("NPCs")
+                
+                if playersFolder then
+                    for _, model in pairs(playersFolder:GetChildren()) do
+                        if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") and isNextbotModel(model) then
+                            local dist = (model.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
+                            if dist < nearestDistance then
+                                nearestDistance = dist
+                                nearestNextbot = model
+                            end
+                        end
+                    end
+                end
+                
+                if npcsFolder then
+                    for _, model in pairs(npcsFolder:GetChildren()) do
+                        if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") and isNextbotModel(model) then
+                            local dist = (model.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
+                            if dist < nearestDistance then
+                                nearestDistance = dist
+                                nearestNextbot = model
+                            end
+                        end
+                    end
+                end
+                
+                local threshold = featureStates.AntiNextbotDistance
+                local isTooClose = (nearestDistance < threshold)
+                
+                if isTooClose and not farmsSuppressedByAntiNextbot then
+                    previousMoneyFarm = getgenv().moneyfarm
+                    previousTicketFarm = getgenv().ticketfarm
+                    previousAutoWin = getgenv().autowin
+                    
+                    getgenv().moneyfarm = false
+                    getgenv().ticketfarm = false
+                    getgenv().autowin = false
+                    
+                    stopAutoMoneyFarm()
+                    stopAutoWin()
+                    
+                    if AutoMoneyFarmToggle and AutoMoneyFarmToggle.Set then AutoMoneyFarmToggle:Set(false) end
+                    if AutoTicketFarmToggle and AutoTicketFarmToggle.Set then AutoTicketFarmToggle:Set(false) end
+                    if AutoWinToggle and AutoWinToggle.Set then AutoWinToggle:Set(false) end
+                    
+                    farmsSuppressedByAntiNextbot = true
+                elseif not isTooClose and farmsSuppressedByAntiNextbot then
+                    getgenv().moneyfarm = previousMoneyFarm
+                    getgenv().ticketfarm = previousTicketFarm
+                    getgenv().autowin = previousAutoWin
+                    
+                    if previousMoneyFarm then
+                        startAutoMoneyFarm()
+                        if AutoMoneyFarmToggle and AutoMoneyFarmToggle.Set then AutoMoneyFarmToggle:Set(true) end
+                    end
+                    if previousTicketFarm then
+                        if AutoTicketFarmToggle and AutoTicketFarmToggle.Set then AutoTicketFarmToggle:Set(true) end
+                    end
+                    if previousAutoWin then
+                        startAutoWin()
+                        if AutoWinToggle and AutoWinToggle.Set then AutoWinToggle:Set(true) end
+                    end
+                    
+                    farmsSuppressedByAntiNextbot = false
+                end
+                
+                if isTooClose then
+                    local safePart = workspace:FindFirstChild("SecurityPart")
+                    if safePart then
+                        humanoidRootPart.CFrame = safePart.CFrame + Vector3.new(math.random(-5, 5), 3, math.random(-5, 5))
+                    end
+                end
+            end)
+        else
+            if antiNextbotConnection then
+                antiNextbotConnection:Disconnect()
+                antiNextbotConnection = nil
+            end
+            if farmsSuppressedByAntiNextbot then
+                getgenv().moneyfarm = previousMoneyFarm
+                getgenv().ticketfarm = previousTicketFarm
+                getgenv().autowin = previousAutoWin
+                
+                if previousMoneyFarm then
+                    startAutoMoneyFarm()
+                    if AutoMoneyFarmToggle and AutoMoneyFarmToggle.Set then AutoMoneyFarmToggle:Set(true) end
+                end
+                if previousTicketFarm then
+                    if AutoTicketFarmToggle and AutoTicketFarmToggle.Set then AutoTicketFarmToggle:Set(true) end
+                end
+                if previousAutoWin then
+                    startAutoWin()
+                    if AutoWinToggle and AutoWinToggle.Set then AutoWinToggle:Set(true) end
+                end
+                
+                farmsSuppressedByAntiNextbot = false
+            end
+        end
     end
 })
 
-local AntiNextbotTeleportTypeDropdown = Tabs.Main:Dropdown({
+ AntiNextbotTeleportTypeDropdown = Tabs.Main:Dropdown({
     Title = "Anti-Nextbot Teleport Type",
     Desc = "Choose how to teleport when avoiding Nextbots",
     Values = {"Players", "Spawn", "Distance"},
@@ -2926,11 +3007,12 @@ local AntiNextbotTeleportTypeDropdown = Tabs.Main:Dropdown({
     end
 })
 
-local AntiNextbotDistanceInput = Tabs.Main:Input({
+ AntiNextbotDistanceInput = Tabs.Main:Input({
     Title = "Anti-Nextbot Distance",
     Desc = "Distance threshold for Nextbot detection",
     Placeholder = tostring(featureStates.AntiNextbotDistance),
     NumbersOnly = true,
+    Value = tostring(featureStates.AntiNextbotDistance),
     Callback = function(value)
         local num = tonumber(value)
         if num and num > 0 then
@@ -2938,8 +3020,7 @@ local AntiNextbotDistanceInput = Tabs.Main:Input({
         end
     end
 })
-
-local DistanceTeleportInput = Tabs.Main:Input({
+ DistanceTeleportInput = Tabs.Main:Input({
     Title = "Distance Teleport",
     Desc = "How far to teleport when using Distance mode",
     Placeholder = tostring(featureStates.DistanceTeleport),
@@ -3316,6 +3397,169 @@ task.spawn(function()
 end)
 
 restartSystemOnEvents()
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+Tabs.Main:Section({ Title = "Emote Crouch", TextSize = 20 })
+Tabs.Main:Divider()
+
+local emoteInputs = {}
+for i = 1, 12 do
+    emoteInputs[i] = Tabs.Main:Input({
+        Title = "Emote " .. i,
+        Placeholder = "Emote Name Here",
+        Callback = function(value)
+            featureStates["Emote" .. i] = value
+        end
+    })
+end
+
+local emoteGui = nil
+local emoteGuiButton = nil
+local emoteInputConnection = nil
+local emoteGuiVisible = false
+
+local function makeDraggable(frame)
+    frame.Active = true
+    frame.Draggable = true
+    pcall(function()
+        local dragDetector = Instance.new("UIDragDetector")
+        dragDetector.Parent = frame
+    end)
+    local originalBackground = frame.BackgroundColor3
+    local originalTransparency = frame.BackgroundTransparency
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            frame.BackgroundTransparency = originalTransparency - 0.1
+        end
+    end)
+    frame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            frame.BackgroundTransparency = originalTransparency
+        end
+    end)
+end
+
+local function triggerRandomEmote()
+    local validEmotes = {}
+    for i = 1, 12 do
+        local emoteName = featureStates["Emote" .. i]
+        if emoteName and emoteName ~= "" then
+            table.insert(validEmotes, emoteName)
+        end
+    end
+    if #validEmotes > 0 then
+        local ohTable1 = { ["Key"] = "Crouch", ["Down"] = true }
+        pcall(function()
+            player.PlayerScripts.Events.temporary_events.UseKeybind:Fire(ohTable1)
+        end)
+        local randomEmote = validEmotes[math.random(1, #validEmotes)]
+        pcall(function()
+            ReplicatedStorage.Events.Character.Emote:FireServer(randomEmote)
+        end)
+    end
+end
+
+local function createEmoteGui(yOffset)
+    local emoteGuiOld = playerGui:FindFirstChild("EmoteGui")
+    if emoteGuiOld then emoteGuiOld:Destroy() end
+    emoteGui = Instance.new("ScreenGui")
+    emoteGui.Name = "EmoteGui"
+    emoteGui.IgnoreGuiInset = true
+    emoteGui.ResetOnSpawn = false
+    emoteGui.Enabled = emoteGuiVisible and isMobile
+    emoteGui.Parent = playerGui
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 60, 0, 60)
+    frame.Position = UDim2.new(0.5, -30, 0.12 + (yOffset or 0), 0)
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.35
+    frame.BorderSizePixel = 0
+    frame.Parent = emoteGui
+    makeDraggable(frame)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(150, 150, 150)
+    stroke.Thickness = 2
+    stroke.Parent = frame
+    local label = Instance.new("TextLabel")
+    label.Text = "Emote Crouch"
+    label.Size = UDim2.new(0.9, 0, 0.5, 0)
+    label.Position = UDim2.new(0.05, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Roboto
+    label.TextSize = 16
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextScaled = true
+    label.Parent = frame
+    emoteGuiButton = Instance.new("TextButton")
+    emoteGuiButton.Name = "TriggerButton"
+    emoteGuiButton.Text = "Start"
+    emoteGuiButton.Size = UDim2.new(0.9, 0, 0.5, 0)
+    emoteGuiButton.Position = UDim2.new(0.05, 0, 0.5, 0)
+    emoteGuiButton.BackgroundColor3 = Color3.fromRGB(0, 120, 80)
+    emoteGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    emoteGuiButton.Font = Enum.Font.Roboto
+    emoteGuiButton.TextSize = 14
+    emoteGuiButton.TextXAlignment = Enum.TextXAlignment.Center
+    emoteGuiButton.TextYAlignment = Enum.TextYAlignment.Center
+    emoteGuiButton.TextScaled = true
+    emoteGuiButton.Parent = frame
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 4)
+    buttonCorner.Parent = emoteGuiButton
+    emoteGuiButton.MouseButton1Click:Connect(function()
+        triggerRandomEmote()
+    end)
+end
+
+EmoteGUIToggle = Tabs.Main:Toggle({
+    Title = "Emote Crouch",
+    Desc = "Press J keybind if you have keyboard, Only type emote name without space and inside your emote slot will work",
+    Value = false,
+    Callback = function(state)
+        emoteGuiVisible = state
+        if state then
+            if emoteInputConnection then
+                emoteInputConnection:Disconnect()
+            end
+            spawn(function()
+                emoteInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                    if gameProcessed then return end
+                    if input.KeyCode == Enum.KeyCode.J then
+                        triggerRandomEmote()
+                    end
+                end)
+            end)
+            
+            if isMobile and not emoteGui then
+                createEmoteGui(0)
+            elseif emoteGui then
+                emoteGui.Enabled = isMobile
+            end
+        else
+            if emoteGui then
+                emoteGui:Destroy()
+                emoteGui = nil
+                emoteGuiButton = nil
+            end
+            if emoteInputConnection then
+                emoteInputConnection:Disconnect()
+                emoteInputConnection = nil
+            end
+        end
+    end
+})
+
+player.CharacterAdded:Connect(function()
+    if emoteGuiVisible and isMobile and not emoteGui then
+        createEmoteGui(0)
+    end
+end)
+
    -- Player Tabs
    Tabs.Player:Section({ Title = "Player", TextSize = 40 })
     Tabs.Player:Divider()
@@ -5352,7 +5596,216 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
 end)
 
 checkBhopState()
+if not featureStates then
+    featureStates = {
+        AutoCrouch = false,
+        AutoCrouchMode = "Air"
+    }
+end
 
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+getgenv().crouchGuiVisible = not UserInputService.KeyboardEnabled
+
+local previousCrouchState = false
+local spamDown = true
+local crouchConnection = nil
+local keybindConnection = nil
+local guiInstance = nil
+
+local function fireKeybind(down, key)
+    local ohTable = {
+        ["Down"] = down,
+        ["Key"] = key
+    }
+    local event = game:GetService("Players").LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("Events"):WaitForChild("temporary_events"):WaitForChild("UseKeybind")
+    event:Fire(ohTable)
+end
+
+local function makeDraggable(frame)
+    frame.Active = true
+    frame.Draggable = true
+    
+    local dragDetector = Instance.new("UIDragDetector")
+    dragDetector.Parent = frame
+    
+    local originalBackground = frame.BackgroundColor3
+    local originalTransparency = frame.BackgroundTransparency
+    
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            frame.BackgroundTransparency = originalTransparency - 0.1
+        end
+    end)
+    
+    frame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            frame.BackgroundTransparency = originalTransparency
+        end
+    end)
+end
+
+local function createCrouchGui(yOffset)
+    local crouchGuiOld = playerGui:FindFirstChild("CrouchGui")
+    if crouchGuiOld then crouchGuiOld:Destroy() end
+    
+    local crouchGui = Instance.new("ScreenGui")
+    crouchGui.Name = "CrouchGui"
+    crouchGui.IgnoreGuiInset = true
+    crouchGui.ResetOnSpawn = false
+    crouchGui.Enabled = getgenv().crouchGuiVisible
+    crouchGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 50, 0, 50)
+    frame.Position = UDim2.new(0.5, -25, 0.12 + (yOffset or 0), 0)
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.35
+    frame.BorderSizePixel = 0
+    frame.Parent = crouchGui
+    makeDraggable(frame)
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(150, 150, 150)
+    stroke.Thickness = 2
+    stroke.Parent = frame
+
+    local label = Instance.new("TextLabel")
+    label.Text = "Auto Crouch"
+    label.Size = UDim2.new(0.9, 0, 0.6, 0)
+    label.Position = UDim2.new(0.05, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Roboto
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextScaled = true
+    label.Parent = frame
+
+    local crouchGuiButton = Instance.new("TextButton")
+    crouchGuiButton.Name = "ToggleButton"
+    crouchGuiButton.Text = featureStates.AutoCrouch and "On" or "Off"
+    crouchGuiButton.Size = UDim2.new(0.9, 0, 0.4, 0)
+    crouchGuiButton.Position = UDim2.new(0.05, 0, 0.6, 0)
+    crouchGuiButton.BackgroundColor3 = featureStates.AutoCrouch and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    crouchGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    crouchGuiButton.Font = Enum.Font.Roboto
+    crouchGuiButton.TextSize = 12
+    crouchGuiButton.TextXAlignment = Enum.TextXAlignment.Center
+    crouchGuiButton.TextYAlignment = Enum.TextYAlignment.Center
+    crouchGuiButton.TextScaled = true
+    crouchGuiButton.Parent = frame
+
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 4)
+    buttonCorner.Parent = crouchGuiButton
+
+    crouchGuiButton.MouseButton1Click:Connect(function()
+        featureStates.AutoCrouch = not featureStates.AutoCrouch
+        crouchGuiButton.Text = featureStates.AutoCrouch and "On" or "Off"
+        crouchGuiButton.BackgroundColor3 = featureStates.AutoCrouch and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+    end)
+
+    guiInstance = crouchGui
+end
+
+local function startAutoCrouch()
+    featureStates.AutoCrouch = true
+    previousCrouchState = false
+    spamDown = true
+
+    if not guiInstance then
+        createCrouchGui()
+    else
+        guiInstance.Enabled = getgenv().crouchGuiVisible
+    end
+
+    if crouchConnection then crouchConnection:Disconnect() end
+    crouchConnection = RunService.Heartbeat:Connect(function()
+        local character = Players.LocalPlayer.Character
+        if not character or not character:FindFirstChild("Humanoid") then return end
+
+        local humanoid = character.Humanoid
+        local mode = featureStates.AutoCrouchMode
+
+        if mode == "Normal" then
+            fireKeybind(spamDown, "Crouch")
+            spamDown = not spamDown
+        else
+            local isAir = (humanoid.FloorMaterial == Enum.Material.Air) and (humanoid:GetState() ~= Enum.HumanoidStateType.Seated)
+            local shouldCrouch = (mode == "Air" and isAir) or (mode == "Ground" and not isAir)
+            if shouldCrouch ~= previousCrouchState then
+                fireKeybind(shouldCrouch, "Crouch")
+                previousCrouchState = shouldCrouch
+            end
+        end
+    end)
+
+    if keybindConnection then keybindConnection:Disconnect() end
+    keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.C then
+            featureStates.AutoCrouch = not featureStates.AutoCrouch
+            local gui = playerGui:FindFirstChild("CrouchGui")
+            if gui then
+                local button = gui.Frame:FindFirstChild("ToggleButton")
+                if button then
+                    button.Text = featureStates.AutoCrouch and "On" or "Off"
+                    button.BackgroundColor3 = featureStates.AutoCrouch and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
+                end
+            end
+        end
+    end)
+
+    Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
+        previousCrouchState = false
+        spamDown = true
+    end)
+end
+
+local function stopAutoCrouch()
+    featureStates.AutoCrouch = false
+    if previousCrouchState then
+        fireKeybind(false, "Crouch")
+        previousCrouchState = false
+    end
+
+    if crouchConnection then
+        crouchConnection:Disconnect()
+        crouchConnection = nil
+    end
+
+    if keybindConnection then
+        keybindConnection:Disconnect()
+        keybindConnection = nil
+    end
+
+    if guiInstance then
+        guiInstance.Enabled = false
+    end
+end
+
+AutoCrouchToggle = Tabs.Auto:Toggle({
+    Title = "Auto Crouch",
+    Desc = "Press C to toggle if you on keyboard",
+    Value = false,
+    Callback = function(state)
+        if state then
+            startAutoCrouch()
+        else
+            stopAutoCrouch()
+        end
+    end
+})
 AutoCrouchModeDropdown = Tabs.Auto:Dropdown({
     Title = "Auto Crouch Mode",
     Values = {"Air", "Normal", "Ground"},
@@ -5362,34 +5815,6 @@ AutoCrouchModeDropdown = Tabs.Auto:Dropdown({
     end
 })
 
-AutoEmoteToggle = Tabs.Auto:Toggle({
-    Title = "Auto Emote (Hold Crouch Button)",
-    Value = false,
-    Callback = function(state)
-        getgenv().EmoteEnabled = state
-    end
-})
-EmoteDropdown = Tabs.Auto:Dropdown({
-    Title = "Select Emote",
-    Values = emoteList,
-    Multi = false,
-    Callback = function(option)
-        getgenv().SelectedEmote = option
-    end
-})
-
-    AutoCarryToggle = Tabs.Auto:Toggle({
-        Title = "loc:AUTO_CARRY",
-        Value = false,
-        Callback = function(state)
-            featureStates.AutoCarry = state
-            if state then
-                startAutoCarry()
-            else
-                stopAutoCarry()
-            end
-        end
-    })
 
 getgenv().autoCarryGuiVisible = false
 
@@ -5423,6 +5848,29 @@ local function makeDraggable(frame)
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
+        end
+    end)
+end
+
+local function makeDraggable(frame)
+    frame.Active = true
+    frame.Draggable = true
+    
+    local dragDetector = Instance.new("UIDragDetector")
+    dragDetector.Parent = frame
+    
+    local originalBackground = frame.BackgroundColor3
+    local originalTransparency = frame.BackgroundTransparency
+    
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            frame.BackgroundTransparency = originalTransparency - 0.1
+        end
+    end)
+    
+    frame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            frame.BackgroundTransparency = originalTransparency
         end
     end)
 end
@@ -5728,6 +6176,16 @@ AutoVoteModeDropdown = Tabs.Auto:Dropdown({
         Title = "loc:AUTO_MONEY_FARM",
         Value = false,
         Callback = function(state)
+        if farmsSuppressedByAntiNextbot and state then
+    WindUI:Notify({
+        Title = "Farm Blocked",
+        Content = "Cannot enable while Nextbot is too close. Wait or move away.",
+        Duration = 3
+    })
+    AutoMoneyFarmToggle:Set(false)
+    return
+end
+farmsSuppressedByAntiNextbot = false
             featureStates.AutoMoneyFarm = state
             getgenv().moneyfarm = state
             if state then
@@ -5761,16 +6219,11 @@ AutoTicketFarmToggle = Tabs.Auto:Toggle({
         local ticketProcessedTime = 0
 
         if state then
-            local securityPart = workspace:FindFirstChild("SecurityPartTemp")
+            local securityPart = workspace:FindFirstChild("SecurityPart")
             if not securityPart then
-                securityPart = Instance.new("Part")
-                securityPart.Name = "SecurityPartTemp"
-                securityPart.Size = Vector3.new(10, 1, 10)
-                securityPart.Position = Vector3.new(0, 500, 0)
-                securityPart.Anchored = true
-                securityPart.CanCollide = true
-                securityPart.Transparency = 1
-                securityPart.Parent = workspace
+                print("SecurityPart not found")
+                getgenv().ticketfarm = false
+                return
             end
 
             AutoTicketFarmConnection = game:GetService("RunService").Heartbeat:Connect(function()
@@ -5860,60 +6313,54 @@ AutoTicketFarmToggle = Tabs.Auto:Toggle({
                 humanoidRootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
             end
         end
-        local securityPart = workspace:FindFirstChild("SecurityPartTemp")
-    if securityPart then
-        securityPart:Destroy()
-    end
     end
 })
 -- Utility Tab
-Tabs.Utility:Button({
-    Title = "Bypass Battle Pass Waiting",
-    Desc = "Skip all battle pass requirements and unlock everything instantly",
-    Callback = function()
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
-        local Players = game:GetService("Players")
-        local LocalPlayer = Players.LocalPlayer
-        
-        LocalPlayer:SetAttribute("Tickets", 999999)
-        LocalPlayer:SetAttribute("Points", 999999)
-        LocalPlayer:SetAttribute("Tokens", 999999)
-        LocalPlayer:SetAttribute("AccumulatedTickets", 999999)
-        
-        local stats = workspace.Game.Stats
-        if stats:GetAttribute("ServerTick") then
-            stats:SetAttribute("ServerTick", stats:GetAttribute("ServerTick") + 9999999)
-        end
-        
-        local Events = ReplicatedStorage.Events.Data
-        pcall(function()
-            local battlepassData = Events.GetBattlepassData:InvokeServer()
-            if battlepassData and battlepassData.Event then
-                local eventModule = ReplicatedStorage.Info.Events.Types:FindFirstChild(battlepassData.Event)
-                if eventModule then
-                    local eventData = require(eventModule)
-                    for pageNumber, pageData in pairs(eventData.Rewards or {}) do
-                        for _, reward in pairs(pageData.Items or {}) do
-                            pcall(function()
-                                Events.Purchase:InvokeServer(reward.ID or reward.Name)
-                            end)
-                        end
-                    end
-                end
-            end
-        end)
-        
-        local originalPurchase = Events.Purchase
-        Events.Purchase = function(itemId)
-            pcall(function()
-                Events.AddToInventory:InvokeServer(itemId)
-            end)
-            return true
-        end
-        
-        print("Complete Battlepass Bypass Activated!")
+Tabs.Utility:Toggle({
+    Title = "Exchange Menu",
+    Default = false,
+    Callback = function(value)
+        game.Players.LocalPlayer.PlayerGui.Menu.Views.Battlepass.Exchange.Visible = value
     end
 })
+
+Tabs.Utility:Toggle({
+    Title = "Bypass Battle Pass Waiting",
+    Desc = "Skip all battle pass requirements and unlock everything instantly",
+    Callback = function(value)
+        if value then
+            -- Stop loop when true
+            if unlockLoop then
+                unlockLoop:Disconnect()
+                unlockLoop = nil
+            end
+            game:GetService("Players").LocalPlayer.PlayerGui.Menu.Views.Battlepass.ViewPass.Center.ViewPass.Unlocked.Visible = true
+        else
+            -- Start loop when false
+            unlockLoop = game:GetService("RunService").Heartbeat:Connect(function()
+                local unlocked = game:GetService("Players").LocalPlayer.PlayerGui.Menu.Views.Battlepass.ViewPass.Center.ViewPass.Unlocked
+                if unlocked and unlocked.Parent then
+                    unlocked.Visible = false
+                end
+            end)
+        end
+    end
+})
+
+Tabs.Utility:Button({
+    Title = "Clear Invis Walls",
+    Callback = function()
+        local invisPartsFolder = workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Map") and workspace.Game.Map:FindFirstChild("InvisParts")
+        if invisPartsFolder then
+            for _, obj in ipairs(invisPartsFolder:GetDescendants()) do
+                if obj:IsA("BasePart") then
+                    obj.CanCollide = false
+                end
+            end
+        end
+    end
+})
+
 FreeCamToggle = Tabs.Utility:Toggle({
     Title = "Free Cam UI",
     Desc = "Note: Sometimes it's may be glitchy so don't use it too often, I can't really fix it",
@@ -5951,7 +6398,6 @@ local FreeCamSpeedSlider = Tabs.Utility:Slider({
 TimeChangerInput = Tabs.Utility:Input({
     Title = "Set Time (HH:MM)",
     Placeholder = "12:00",
-    Value = "",
     Callback = function(value)
         value = value:gsub("^%s*(.-)%s*$", "%1")
         
@@ -5986,147 +6432,6 @@ TimeChangerInput = Tabs.Utility:Input({
     end
 })
 
-featureStates.AutoCrouch = false
-featureStates.AutoCrouchMode = "Air"
-
-local previousCrouchState = false
-local spamDown = true
-
-local function fireKeybind(down, key)
-    local ohTable = {
-        ["Down"] = down,
-        ["Key"] = key
-    }
-    local event = game:GetService("Players").LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("Events"):WaitForChild("temporary_events"):WaitForChild("UseKeybind")
-    event:Fire(ohTable)
-end
-
-local function createAutoCrouchGui()
-    local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-    
-    local autoCrouchGuiOld = playerGui:FindFirstChild("AutoCrouchGui")
-    if autoCrouchGuiOld then autoCrouchGuiOld:Destroy() end
-    
-    local autoCrouchGui = Instance.new("ScreenGui")
-    autoCrouchGui.Name = "AutoCrouchGui"
-    autoCrouchGui.IgnoreGuiInset = true
-    autoCrouchGui.ResetOnSpawn = false
-    autoCrouchGui.Enabled = true
-    autoCrouchGui.Parent = playerGui
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 50, 0, 50)
-    frame.Position = UDim2.new(0.5, -50, 0.12, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    frame.BackgroundTransparency = 0.35
-    frame.BorderSizePixel = 0
-    frame.Parent = autoCrouchGui
-    
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
-
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-        end
-    end)
-
-    frame.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-
-    game:GetService("UserInputService").InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = frame
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(150, 150, 150)
-    stroke.Thickness = 2
-    stroke.Parent = frame
-
-    local label = Instance.new("TextLabel")
-    label.Text = "Auto Crouch"
-    label.Size = UDim2.new(0.9, 0, 0.45, 0)
-    label.Position = UDim2.new(0.05, 0, 0.05, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Font = Enum.Font.Roboto
-    label.TextSize = 30
-    label.TextXAlignment = Enum.TextXAlignment.Center
-    label.TextYAlignment = Enum.TextYAlignment.Center
-    label.TextScaled = true
-    label.Parent = frame
-
-    local autoCrouchGuiButton = Instance.new("TextButton")
-    autoCrouchGuiButton.Name = "ToggleButton"
-    autoCrouchGuiButton.Text = featureStates.AutoCrouch and "On" or "Off"
-    autoCrouchGuiButton.Size = UDim2.new(0.9, 0, 0.4, 0)
-    autoCrouchGuiButton.Position = UDim2.new(0.05, 0, 0.5, 0)
-    autoCrouchGuiButton.BackgroundColor3 = featureStates.AutoCrouch and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
-    autoCrouchGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    autoCrouchGuiButton.Font = Enum.Font.Roboto
-    autoCrouchGuiButton.TextSize = 16
-    autoCrouchGuiButton.TextXAlignment = Enum.TextXAlignment.Center
-    autoCrouchGuiButton.TextYAlignment = Enum.TextYAlignment.Center
-    autoCrouchGuiButton.TextScaled = true
-    autoCrouchGuiButton.Parent = frame
-
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 4)
-    buttonCorner.Parent = autoCrouchGuiButton
-
-    autoCrouchGuiButton.MouseButton1Click:Connect(function()
-        featureStates.AutoCrouch = not featureStates.AutoCrouch
-        autoCrouchGuiButton.Text = featureStates.AutoCrouch and "On" or "Off"
-        autoCrouchGuiButton.BackgroundColor3 = featureStates.AutoCrouch and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 0, 0)
-        AutoCrouchToggle:Set(featureStates.AutoCrouch)
-    end)
-end
-
-local crouchConnection = RunService.Heartbeat:Connect(function()
-    if not featureStates.AutoCrouch then 
-        if previousCrouchState then
-            fireKeybind(false, "Crouch")
-            previousCrouchState = false
-        end
-        return 
-    end
-
-    local character = Players.LocalPlayer.Character
-    if not character or not character:FindFirstChild("Humanoid") then return end
-
-    local humanoid = character.Humanoid
-    local mode = featureStates.AutoCrouchMode
-
-    if mode == "Normal" then
-        fireKeybind(spamDown, "Crouch")
-        spamDown = not spamDown
-    else
-        local isAir = (humanoid.FloorMaterial == Enum.Material.Air) and (humanoid:GetState() ~= Enum.HumanoidStateType.Seated)
-        local shouldCrouch = (mode == "Air" and isAir) or (mode == "Ground" and not isAir)
-        if shouldCrouch ~= previousCrouchState then
-            fireKeybind(shouldCrouch, "Crouch")
-            previousCrouchState = shouldCrouch
-        end
-    end
-end)
-
-Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
-    previousCrouchState = false
-    spamDown = true
-end)
 player.CharacterAdded:Connect(function()
     hasRevived = false
     if featureStates.AutoSelfRevive then
@@ -6543,6 +6848,183 @@ Tabs.Utility:Button({
         end
     end
 })
+
+local invisPartsFolder = workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Map") and workspace.Game.Map:FindFirstChild("InvisParts")
+
+local movingSecurityParts = false
+local partSpeed = 10
+local partRadius = 100
+local storedSecurityParts = {}
+local movementConnection = nil
+local function disableInvisPartsCollision()
+    if invisPartsFolder then
+    WindUI:Notify({
+                    Title = "Notification",
+                    Content = "Invisible Border is removed",
+                    Duration = 3
+                })
+        for _, obj in ipairs(invisPartsFolder:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.CanCollide = false
+            end
+        end
+    end
+end
+
+local function restoreInvisPartsCollision()
+    if invisPartsFolder then
+    WindUI:Notify({
+                    Title = "Notification",
+                    Content = "Invisible Border is Restored",
+                    Duration = 3
+                })
+        for _, obj in ipairs(invisPartsFolder:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.CanCollide = true
+            end
+        end
+    end
+end
+
+local securityPartToggle = Tabs.Utility:Toggle({
+    Title = "Moving Security Part",
+    Value = false,
+    Callback = function(state)
+        movingSecurityParts = state
+        
+        if state then
+            disableInvisPartsCollision()
+            
+            local partNames = {"SecurityPart"}
+            storedSecurityParts = {}
+            
+            for _, partName in ipairs(partNames) do
+                local part = workspace:FindFirstChild(partName)
+                if part then
+                    table.insert(storedSecurityParts, part)
+                end
+            end
+            
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Part") and string.find(obj.Name:lower(), "securitypart") and not table.find(storedSecurityParts, obj) then
+                    table.insert(storedSecurityParts, obj)
+                end
+            end
+            
+            if #storedSecurityParts == 0 then
+                WindUI:Notify({
+                    Title = "Security Parts",
+                    Content = "No security parts found",
+                    Duration = 3
+                })
+                movingSecurityParts = false
+                restoreInvisPartsCollision()
+                return
+            end
+            
+            for _, part in ipairs(storedSecurityParts) do
+                for _, child in ipairs(part:GetChildren()) do
+                    if child:IsA("BodyVelocity") or child:IsA("BodyGyro") or child:IsA("BodyForce") then
+                        child:Destroy()
+                    end
+                end
+                
+                part.CanCollide = true
+                part.Anchored = false
+                part.Massless = false
+                
+                local bodyVelocity = Instance.new("BodyVelocity")
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+                bodyVelocity.Parent = part
+                
+                local bodyGyro = Instance.new("BodyGyro")
+                bodyGyro.MaxTorque = Vector3.new(4000, 4000, 4000)
+                bodyGyro.P = 1000
+                bodyGyro.D = 100
+                bodyGyro.Parent = part
+            end
+            
+            movementConnection = game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+                if not movingSecurityParts or #storedSecurityParts == 0 then
+                    if movementConnection then
+                        movementConnection:Disconnect()
+                        movementConnection = nil
+                    end
+                    return
+                end
+                
+                local mainPart = storedSecurityParts[1]
+                if mainPart and mainPart.Parent then
+                    local time = tick()
+                    local x = math.cos(time * partSpeed * 0.1) * partRadius
+                    local z = math.sin(time * partSpeed * 0.1) * partRadius
+                    local y = math.sin(time * partSpeed * 0.05) * 10 + 500
+                    
+                    mainPart.Position = Vector3.new(x - 29, y, z + 30)
+                    
+                    for i = 2, #storedSecurityParts do
+                        local followerPart = storedSecurityParts[i]
+                        if followerPart and followerPart.Parent then
+                            local offsetX = (i - 1) * 5
+                            local offsetZ = (i - 1) * 5
+                            followerPart.Position = mainPart.Position + Vector3.new(offsetX, 0, offsetZ)
+                        end
+                    end
+                else
+                    movingSecurityParts = false
+                end
+            end)
+        else
+            restoreInvisPartsCollision()
+            
+            if movementConnection then
+                movementConnection:Disconnect()
+                movementConnection = nil
+            end
+            
+            for _, part in ipairs(storedSecurityParts) do
+                if part and part.Parent then
+                    part.Anchored = true
+                    part.Position = Vector3.new(0, 500, 0)
+                    
+                    for _, child in ipairs(part:GetChildren()) do
+                        if child:IsA("BodyVelocity") or child:IsA("BodyGyro") or child:IsA("BodyForce") then
+                            child:Destroy()
+                        end
+                    end
+                end
+            end
+            storedSecurityParts = {}
+        end
+    end
+})
+
+local partSpeedInput = Tabs.Utility:Input({
+    Title = "Part Speed",
+    Placeholder = "10",
+    Value = tostring(partSpeed),
+    NumbersOnly = true,
+    Callback = function(value)
+        local speed = tonumber(value)
+        if speed and speed > 0 then
+            partSpeed = speed
+        end
+    end
+})
+
+local partRadiusInput = Tabs.Utility:Input({
+    Title = "Part Radius",
+    Placeholder = "100",
+    Value = tostring(partRadius),
+    NumbersOnly = true,
+    Callback = function(value)
+        local radius = tonumber(value)
+        if radius and radius > 0 then
+            partRadius = radius
+        end
+    end
+})
 -- teleports tab
 Tabs.Teleport:Section({ Title = "Teleports", TextSize = 20 })
 Tabs.Teleport:Divider()
@@ -6626,7 +7108,6 @@ Tabs.Teleport:Button({
     end
 })
 
--- Player Dropdown for Teleport
 local playerList = {}
 PlayerDropdown = Tabs.Teleport:Dropdown({
     Title = "Select Player",
@@ -6752,37 +7233,22 @@ Tabs.Teleport:Button({
 
 Tabs.Teleport:Button({
     Title = "Teleport to SecurityPart",
-    Desc = "Teleport to the safe SecurityPart location",
     Icon = "shield",
     Callback = function()
-        local function createSecurityPart()
-            local existingPart = workspace:FindFirstChild("SecurityPart")
-            
-            if existingPart then
-                return existingPart
-            end
-            
-            local securityPart = Instance.new("Part")
-            securityPart.Name = "SecurityPart"
-            securityPart.Size = Vector3.new(10, 1, 10)
-            securityPart.Position = Vector3.new(0, 500, 0)
-            securityPart.Anchored = true
-            securityPart.CanCollide = true
-            securityPart.Material = Enum.Material.Plastic
-            securityPart.Parent = workspace
-            
-            return securityPart
-        end
+        local existingPart = workspace:FindFirstChild("SecurityPart")
         
-        local securityPart = createSecurityPart()
-        local character = game.Players.LocalPlayer.Character
-        
-        if character then
-            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if existingPart then
+            local character = game.Players.LocalPlayer.Character
             
-            if humanoidRootPart and securityPart then
-                humanoidRootPart.CFrame = securityPart.CFrame + Vector3.new(0, 3, 0)
+            if character then
+                local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+                
+                if humanoidRootPart then
+                    humanoidRootPart.CFrame = existingPart.CFrame + Vector3.new(0, 3, 0)
+                end
             end
+        else
+            print("SecurityPart not found")
         end
     end
 })
@@ -6917,8 +7383,6 @@ Tabs.Teleport:Button({
                 configFile:Register("NextbotRainbowTracersToggle", NextbotRainbowTracersToggle)
                 configFile:Register("DownedBoxESPToggle", DownedBoxESPToggle)
                 configFile:Register("DownedBoxTypeDropdown", DownedBoxTypeDropdown)
-                configFile:Register("EmoteDropdown", EmoteDropdown)
-configFile:Register("AutoEmoteToggle", AutoEmoteToggle)
  configFile:Register("NoFogToggle", NoFogToggle)
                 configFile:Register("DownedTracerToggle", DownedTracerToggle)
                 configFile:Register("DownedNameESPToggle", DownedNameESPToggle)
@@ -7370,56 +7834,7 @@ MainTab.Input = function(self, config)
     }
     return input
 end
-
-
-task.spawn(function()
-    local Players = game:GetService("Players")
-    local player = Players.LocalPlayer
-    local guiPath = { "PlayerGui", "Shared", "HUD", "Mobile", "Right", "Mobile", "CrouchButton" }
-
-    local function waitForDescendant(parent, name)
-        local found = parent:FindFirstChild(name, true)
-        while not found do
-            parent.DescendantAdded:Wait()
-            found = parent:FindFirstChild(name, true)
-        end
-        return found
-    end
-
-    local function connectCrouchButton()
-        local gui = player:WaitForChild(guiPath[1])
-        for i = 2, #guiPath do
-            gui = waitForDescendant(gui, guiPath[i])
-        end
-        local button = gui
-
-        local holding = false
-        local validHold = false
-
-        button.MouseButton1Down:Connect(function()
-            holding = true
-            validHold = true
-            task.delay(0.5, function()
-                if holding and validHold and getgenv().EmoteEnabled and getgenv().SelectedEmote then
-                    local args = { [1] = getgenv().SelectedEmote }
-                    game:GetService("ReplicatedStorage"):WaitForChild("Events", 9e9):WaitForChild("Character", 9e9):WaitForChild("Emote", 9e9):FireServer(unpack(args))
-                end
-            end)
-        end)
-
-        button.MouseButton1Up:Connect(function()
-            holding = false
-            validHold = false
-        end)
-    end
-
-    while true do
-        pcall(connectCrouchButton)
-        task.wait(1)
-    end
-end)
 end
-
 if not featureStates then
     featureStates = {
         CustomGravity = false,
@@ -7587,12 +8002,12 @@ end
 
 --[[the part of loadstring prevent error]]
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
-if not workspace:FindFirstChild("SecurityPartlifetimelifetime") then
-    local SecurityPartlifetime = Instance.new("Part")
-    SecurityPartlifetime.Name = "SecurityPartlifetimelifetime"
-    SecurityPartlifetime.Size = Vector3.new(10, 1, 10)
-    SecurityPartlifetime.Position = Vector3.new(0, 500, 0)
-    SecurityPartlifetime.Anchored = true
-    SecurityPartlifetime.CanCollide = true
-    SecurityPartlifetime.Parent = workspace
+if not workspace:FindFirstChild("SecurityPart") then
+    local SecurityPart = Instance.new("Part")
+    SecurityPart.Name = "SecurityPart"
+    SecurityPart.Size = Vector3.new(10, 1, 10)
+    SecurityPart.Position = Vector3.new(0, 500, 0)
+    SecurityPart.Anchored = true
+    SecurityPart.CanCollide = true
+    SecurityPart.Parent = workspace
 end
