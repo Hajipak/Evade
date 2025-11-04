@@ -9,7 +9,7 @@ WindUI:SetTheme("Dark")
 local Window = WindUI:CreateWindow({
     Title = "Movement Hub",
     Icon = "rocket",
-    Author = "Made by Zen",
+    Author = "Made by Pnsdg & Yomka",
     Folder = "GameHackUI",
     Size = UDim2.fromOffset(580, 490),
     Theme = "Dark"
@@ -28,7 +28,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- Config
 local configFileName = "movement_hub_final.txt"
 
--- Default settings (ApplyMode kosong!)
+-- Default settings
 local currentSettings = {
     Speed = "1500",
     JumpCap = "1",
@@ -42,8 +42,6 @@ local currentSettings = {
     BounceEpsilon = "0.1",
     BhopMode = "Acceleration",
     BhopAccelValue = "-0.5",
-    InfinitySlide = "false",
-    SlideFriction = "-8",
     LagSwitch = "false",
     LagDuration = "0.5",
     GuiWidth = "80",
@@ -51,22 +49,19 @@ local currentSettings = {
     ShowBhopGui = "false",
     ShowAutoCrouchGui = "false",
     ShowBounceGui = "false",
-    ShowInfinitySlideGui = "false",
     ShowLagSwitchGui = "false"
 }
 
 -- Load config
 if isfile(configFileName) then
-    local success, data = pcall(function()
-        return HttpService:JSONDecode(readfile(configFileName))
-    end)
-    if success and type(data) == "table" then
+    pcall(function()
+        local data = HttpService:JSONDecode(readfile(configFileName))
         for k, v in pairs(data) do
             if currentSettings[k] ~= nil then
                 currentSettings[k] = tostring(v)
             end
         end
-    end
+    end)
 end
 
 -- Save config
@@ -74,7 +69,7 @@ local function saveConfig()
     writefile(configFileName, HttpService:JSONEncode(currentSettings))
 end
 
--- === GET GAME TABLES ===
+-- === GAME TABLES ===
 local requiredFields = {
     Friction = true,
     AirStrafeAcceleration = true,
@@ -93,11 +88,8 @@ end
 local function getConfigTables()
     local tables = {}
     for _, obj in ipairs(getgc(true)) do
-        local success, result = pcall(function()
-            if hasAllFields(obj) then return obj end
-        end)
-        if success and result then
-            table.insert(tables, result)
+        if pcall(hasAllFields, obj) and hasAllFields(obj) then
+            table.insert(tables, obj)
         end
     end
     return tables
@@ -109,17 +101,13 @@ local function applyToTables(callback)
     if currentSettings.ApplyMode == "Optimized" then
         task.spawn(function()
             for i, t in ipairs(targets) do
-                if t and type(t) == "table" then
-                    pcall(callback, t)
-                end
+                if t then pcall(callback, t) end
                 if i % 3 == 0 then task.wait() end
             end
         end)
     else
         for _, t in ipairs(targets) do
-            if t and type(t) == "table" then
-                pcall(callback, t)
-            end
+            if t then pcall(callback, t) end
         end
     end
 end
@@ -142,7 +130,7 @@ local touchConnections = {}
 local function setupBounceOnTouch(character)
     if not BOUNCE_ENABLED then return end
     local hrp = character:WaitForChild("HumanoidRootPart")
-    local connection = hrp.Touched:Connect(function(hit)
+    local conn = hrp.Touched:Connect(function(hit)
         local playerBottom = hrp.Position.Y - hrp.Size.Y / 2
         local hitTop = hit.Position.Y + hit.Size.Y / 2
         if hitTop <= playerBottom + BOUNCE_EPSILON then return end
@@ -157,11 +145,11 @@ local function setupBounceOnTouch(character)
             game:GetService("Debris"):AddItem(bodyVel, 0.2)
         end
     end)
-    touchConnections[character] = connection
+    touchConnections[character] = conn
 end
 
 local function disableBounce()
-    for char, conn in pairs(touchConnections) do
+    for _, conn in pairs(touchConnections) do
         if conn then conn:Disconnect() end
     end
     touchConnections = {}
@@ -228,85 +216,19 @@ end)
 
 task.spawn(function()
     while true do
-        if getgenv().autoJumpEnabled then
-            local char = player.Character
-            if char and char:FindFirstChild("Humanoid") then
-                local humanoid = char.Humanoid
-                if humanoid:GetState() ~= Enum.HumanoidStateType.Jumping and humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
-                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                end
+        if getgenv().autoJumpEnabled and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping and humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             end
-            if getgenv().bhopMode == "No Acceleration" then
-                task.wait(0.05)
-            else
-                task.wait()
-            end
+        end
+        if getgenv().bhopMode == "No Acceleration" then
+            task.wait(0.05)
         else
             task.wait()
         end
     end
 end)
-
--- === INFINITY SLIDE (Dara Hub Style) ===
-local infiniteSlideEnabled = false
-local slideFrictionValue = -8
-local plrModel = nil
-local slideConnection = nil
-
-local function getConfigTables()
-    local tables = {}
-    for _, obj in ipairs(getgc(true)) do
-        local success, result = pcall(function()
-            if hasAllFields(obj) then return obj end
-        end)
-        if success and result then
-            table.insert(tables, result)
-        end
-    end
-    return tables
-end
-
-local function setSlideFriction(value)
-    local tables = getConfigTables()
-    for _, tbl in ipairs(tables) do
-        pcall(function()
-            tbl.Friction = value
-        end)
-    end
-end
-
-local function updatePlayerModel()
-    local GameFolder = workspace:FindFirstChild("Game")
-    local PlayersFolder = GameFolder and GameFolder:FindFirstChild("Players")
-    if PlayersFolder then
-        plrModel = PlayersFolder:FindFirstChild(player.Name)
-    else
-        plrModel = nil
-    end
-end
-
-local function onHeartbeat()
-    if not plrModel then
-        setSlideFriction(5)
-        return
-    end
-    local success, currentState = pcall(function()
-        return plrModel:GetAttribute("State")
-    end)
-    if success and currentState then
-        if currentState == "Slide" then
-            pcall(function()
-                plrModel:SetAttribute("State", "EmotingSlide")
-            end)
-        elseif currentState == "EmotingSlide" then
-            setSlideFriction(slideFrictionValue)
-        else
-            setSlideFriction(5)
-        end
-    else
-        setSlideFriction(5)
-    end
-end
 
 -- === DRAGGABLE ===
 local function makeDraggable(frame)
@@ -524,44 +446,6 @@ MainTab:Input({
     end
 })
 
--- === INFINITY SLIDE ===
-MainTab:Section({ Title = "Infinite Slide" })
-MainTab:Toggle({
-    Title = "Enable Infinite Slide",
-    Value = currentSettings.InfinitySlide == "true",
-    Callback = function(v)
-        currentSettings.InfinitySlide = tostring(v)
-        infiniteSlideEnabled = v
-        if slideConnection then
-            slideConnection:Disconnect()
-            slideConnection = nil
-        end
-        if v then
-            updatePlayerModel()
-            slideConnection = RunService.Heartbeat:Connect(onHeartbeat)
-            player.CharacterAdded:Connect(function()
-                task.wait(0.1)
-                updatePlayerModel()
-            end)
-        else
-            plrModel = nil
-            setSlideFriction(5)
-        end
-        saveConfig()
-    end
-})
-MainTab:Input({
-    Title = "Slide Friction (Negative)",
-    Value = currentSettings.SlideFriction,
-    Callback = function(v)
-        if v:sub(1,1) == "-" then
-            currentSettings.SlideFriction = v
-            slideFrictionValue = tonumber(v) or -8
-            saveConfig()
-        end
-    end
-})
-
 -- === LAG SWITCH ===
 MainTab:Section({ Title = "Lag Switch" })
 MainTab:Toggle({
@@ -680,43 +564,6 @@ local BounceGuiToggle = MainTab:Toggle({
     end
 })
 
--- Infinite Slide
-local InfinitySlideGuiToggle = MainTab:Toggle({
-    Title = "Show Infinite Slide Button",
-    Value = currentSettings.ShowInfinitySlideGui == "true",
-    Callback = function(v)
-        currentSettings.ShowInfinitySlideGui = tostring(v)
-        if v then
-            createFloatingGui("InfinitySlideGui", "Infinite Slide", {
-                text = currentSettings.InfinitySlide == "true" and "On" or "Off",
-                bgColor = currentSettings.InfinitySlide == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0),
-                onClick = function()
-                    local newState = currentSettings.InfinitySlide == "true" and "false" or "true"
-                    currentSettings.InfinitySlide = newState
-                    infiniteSlideEnabled = newState == "true"
-                    if infiniteSlideEnabled then
-                        updatePlayerModel()
-                        slideConnection = RunService.Heartbeat:Connect(onHeartbeat)
-                    else
-                        plrModel = nil
-                        setSlideFriction(5)
-                    end
-                    local btn = playerGui.InfinitySlideGui.Frame:FindFirstChildOfClass("TextButton")
-                    if btn then
-                        btn.Text = newState == "true" and "On" or "Off"
-                        btn.BackgroundColor3 = newState == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0)
-                    end
-                    saveConfig()
-                end
-            })
-        else
-            local gui = playerGui:FindFirstChild("InfinitySlideGui")
-            if gui then gui:Destroy() end
-        end
-        saveConfig()
-    end
-})
-
 -- Lag Switch
 local LagSwitchGuiToggle = MainTab:Toggle({
     Title = "Show Lag Switch Button",
@@ -747,7 +594,7 @@ local LagSwitchGuiToggle = MainTab:Toggle({
 })
 
 -- === UTILITY TAB ===
-UtilityTab:Section({ Title = "Performance" })
+UtilityTab:Section({ Title = "Performance & Visuals" })
 
 -- Remove Textures
 UtilityTab:Button({
@@ -769,7 +616,6 @@ UtilityTab:Button({
 UtilityTab:Button({
     Title = "Low Graphics",
     Callback = function()
-        -- Matikan efek
         for _, eff in ipairs(Lighting:GetChildren()) do
             if eff:IsA("PostProcessingEffect") or eff:IsA("BloomEffect") or eff:IsA("BlurEffect") then
                 eff.Enabled = false
@@ -777,7 +623,6 @@ UtilityTab:Button({
         end
         Lighting.FogEnd = 1e6
         Lighting.GlobalShadows = false
-        -- Hapus partikel
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("ParticleEmitter") or obj:IsA("Fire") or obj:IsA("Smoke") then
                 obj.Enabled = false
@@ -811,11 +656,10 @@ SettingsTab:Input({
         if num and num > 0 then
             currentSettings.GuiWidth = v
             saveConfig()
-            -- Re-apply
+            -- Reapply
             if currentSettings.ShowBhopGui == "true" then BhopGuiToggle:Set(true) end
             if currentSettings.ShowAutoCrouchGui == "true" then AutoCrouchGuiToggle:Set(true) end
             if currentSettings.ShowBounceGui == "true" then BounceGuiToggle:Set(true) end
-            if currentSettings.ShowInfinitySlideGui == "true" then InfinitySlideGuiToggle:Set(true) end
             if currentSettings.ShowLagSwitchGui == "true" then LagSwitchGuiToggle:Set(true) end
         end
     end
@@ -831,7 +675,6 @@ SettingsTab:Input({
             if currentSettings.ShowBhopGui == "true" then BhopGuiToggle:Set(true) end
             if currentSettings.ShowAutoCrouchGui == "true" then AutoCrouchGuiToggle:Set(true) end
             if currentSettings.ShowBounceGui == "true" then BounceGuiToggle:Set(true) end
-            if currentSettings.ShowInfinitySlideGui == "true" then InfinitySlideGuiToggle:Set(true) end
             if currentSettings.ShowLagSwitchGui == "true" then LagSwitchGuiToggle:Set(true) end
         end
     end
@@ -850,7 +693,6 @@ end
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
     applyStoredSettings()
-    updatePlayerModel()
 end)
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
