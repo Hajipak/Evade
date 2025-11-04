@@ -11,7 +11,7 @@ local Window = WindUI:CreateWindow({
     Icon = "rocket",
     Author = "Made by Pnsdg & Yomka",
     Folder = "GameHackUI",
-    Size = UDim2.fromOffset(580, 490),
+    Size = UDim2.fromOffset(580, 400),
     Theme = "Dark"
 })
 
@@ -26,9 +26,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- Config
-local configFileName = "movement_hub_final.txt"
-
--- Default settings
+local configFileName = "movement_hub_gui_config.txt"
 local currentSettings = {
     Speed = "1500",
     JumpCap = "1",
@@ -36,10 +34,10 @@ local currentSettings = {
     ApplyMode = "",  -- KOSONG
     Bhop = "false",
     AutoCrouch = "false",
-    AutoCrouchMode = "Air",
     Bounce = "false",
     BounceHeight = "0",
     BounceEpsilon = "0.1",
+    AutoCrouchMode = "Air",
     BhopMode = "Acceleration",
     BhopAccelValue = "-0.5",
     LagSwitch = "false",
@@ -54,14 +52,16 @@ local currentSettings = {
 
 -- Load config
 if isfile(configFileName) then
-    pcall(function()
-        local data = HttpService:JSONDecode(readfile(configFileName))
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(readfile(configFileName))
+    end)
+    if success and type(data) == "table" then
         for k, v in pairs(data) do
             if currentSettings[k] ~= nil then
                 currentSettings[k] = tostring(v)
             end
         end
-    end)
+    end
 end
 
 -- Save config
@@ -69,7 +69,7 @@ local function saveConfig()
     writefile(configFileName, HttpService:JSONEncode(currentSettings))
 end
 
--- === GAME TABLES ===
+-- Required fields
 local requiredFields = {
     Friction = true,
     AirStrafeAcceleration = true,
@@ -88,8 +88,11 @@ end
 local function getConfigTables()
     local tables = {}
     for _, obj in ipairs(getgc(true)) do
-        if pcall(hasAllFields, obj) and hasAllFields(obj) then
-            table.insert(tables, obj)
+        local success, result = pcall(function()
+            if hasAllFields(obj) then return obj end
+        end)
+        if success and result then
+            table.insert(tables, result)
         end
     end
     return tables
@@ -101,19 +104,23 @@ local function applyToTables(callback)
     if currentSettings.ApplyMode == "Optimized" then
         task.spawn(function()
             for i, t in ipairs(targets) do
-                if t then pcall(callback, t) end
+                if t and type(t) == "table" then
+                    pcall(callback, t)
+                end
                 if i % 3 == 0 then task.wait() end
             end
         end)
     else
         for _, t in ipairs(targets) do
-            if t then pcall(callback, t) end
+            if t and type(t) == "table" then
+                pcall(callback, t)
+            end
         end
     end
 end
 
 local function applyStoredSettings()
-    if currentSettings.ApplyMode == "" then return end
+    if currentSettings.ApplyMode == "" then return end  -- jangan apply jika belum dipilih
     applyToTables(function(obj)
         obj.Speed = tonumber(currentSettings.Speed) or 1500
         obj.JumpCap = tonumber(currentSettings.JumpCap) or 1
@@ -130,7 +137,7 @@ local touchConnections = {}
 local function setupBounceOnTouch(character)
     if not BOUNCE_ENABLED then return end
     local hrp = character:WaitForChild("HumanoidRootPart")
-    local conn = hrp.Touched:Connect(function(hit)
+    local connection = hrp.Touched:Connect(function(hit)
         local playerBottom = hrp.Position.Y - hrp.Size.Y / 2
         local hitTop = hit.Position.Y + hit.Size.Y / 2
         if hitTop <= playerBottom + BOUNCE_EPSILON then return end
@@ -145,17 +152,19 @@ local function setupBounceOnTouch(character)
             game:GetService("Debris"):AddItem(bodyVel, 0.2)
         end
     end)
-    touchConnections[character] = conn
+    touchConnections[character] = connection
 end
 
 local function disableBounce()
-    for _, conn in pairs(touchConnections) do
+    for char, conn in pairs(touchConnections) do
         if conn then conn:Disconnect() end
     end
     touchConnections = {}
 end
 
-if player.Character then setupBounceOnTouch(player.Character) end
+if player.Character then
+    setupBounceOnTouch(player.Character)
+end
 player.CharacterAdded:Connect(setupBounceOnTouch)
 
 -- === AUTO CROUCH ===
@@ -216,14 +225,19 @@ end)
 
 task.spawn(function()
     while true do
-        if getgenv().autoJumpEnabled and player.Character then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            if humanoid and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping and humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        if getgenv().autoJumpEnabled then
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") then
+                local humanoid = char.Humanoid
+                if humanoid:GetState() ~= Enum.HumanoidStateType.Jumping and humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
             end
-        end
-        if getgenv().bhopMode == "No Acceleration" then
-            task.wait(0.05)
+            if getgenv().bhopMode == "No Acceleration" then
+                task.wait(0.05)
+            else
+                task.wait()
+            end
         else
             task.wait()
         end
@@ -309,10 +323,11 @@ end
 -- === UI SETUP ===
 local FeatureSection = Window:Section({ Title = "Movement", Opened = true })
 local MainTab = FeatureSection:Tab({ Title = "Main", Icon = "user" })
+local VisualsTab = FeatureSection:Tab({ Title = "Visuals", Icon = "camera" })
 local UtilityTab = FeatureSection:Tab({ Title = "Utility", Icon = "wrench" })
 local SettingsTab = FeatureSection:Tab({ Title = "Settings", Icon = "settings" })
 
--- === CORE MOVEMENT ===
+-- === MAIN TAB ===
 MainTab:Section({ Title = "Core Movement" })
 MainTab:Input({
     Title = "Speed",
@@ -357,7 +372,7 @@ MainTab:Dropdown({
     end
 })
 
--- === BHOP ===
+-- Bhop
 MainTab:Section({ Title = "Bhop" })
 MainTab:Toggle({
     Title = "Enable Bhop",
@@ -391,7 +406,7 @@ MainTab:Input({
     end
 })
 
--- === AUTO CROUCH ===
+-- Auto Crouch
 MainTab:Section({ Title = "Auto Crouch" })
 MainTab:Toggle({
     Title = "Enable Auto Crouch",
@@ -411,7 +426,7 @@ MainTab:Dropdown({
     end
 })
 
--- === BOUNCE ===
+-- Bounce
 MainTab:Section({ Title = "Bounce" })
 MainTab:Toggle({
     Title = "Enable Bounce",
@@ -446,7 +461,7 @@ MainTab:Input({
     end
 })
 
--- === LAG SWITCH ===
+-- Lag Switch
 MainTab:Section({ Title = "Lag Switch" })
 MainTab:Toggle({
     Title = "Enable Lag Switch",
@@ -470,10 +485,9 @@ MainTab:Input({
     end
 })
 
--- === FLOATING GUI TOGGLES (di MainTab) ===
+-- Floating GUI Controls
 MainTab:Section({ Title = "Floating GUI" })
 
--- Bhop
 local BhopGuiToggle = MainTab:Toggle({
     Title = "Show Bhop Button",
     Value = currentSettings.ShowBhopGui == "true",
@@ -502,7 +516,6 @@ local BhopGuiToggle = MainTab:Toggle({
     end
 })
 
--- Auto Crouch
 local AutoCrouchGuiToggle = MainTab:Toggle({
     Title = "Show Auto Crouch Button",
     Value = currentSettings.ShowAutoCrouchGui == "true",
@@ -530,7 +543,6 @@ local AutoCrouchGuiToggle = MainTab:Toggle({
     end
 })
 
--- Bounce
 local BounceGuiToggle = MainTab:Toggle({
     Title = "Show Bounce Button",
     Value = currentSettings.ShowBounceGui == "true",
@@ -564,7 +576,6 @@ local BounceGuiToggle = MainTab:Toggle({
     end
 })
 
--- Lag Switch
 local LagSwitchGuiToggle = MainTab:Toggle({
     Title = "Show Lag Switch Button",
     Value = currentSettings.ShowLagSwitchGui == "true",
@@ -590,6 +601,49 @@ local LagSwitchGuiToggle = MainTab:Toggle({
             if gui then gui:Destroy() end
         end
         saveConfig()
+    end
+})
+
+-- === VISUALS TAB ===
+VisualsTab:Toggle({
+    Title = "FullBright",
+    Value = false,
+    Callback = function(v)
+        if v then
+            Lighting.Brightness = 2
+            Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+            Lighting.Ambient = Color3.fromRGB(255,255,255)
+            Lighting.GlobalShadows = false
+        else
+            Lighting.Brightness = 1
+            Lighting.OutdoorAmbient = Color3.fromRGB(0,0,0)
+            Lighting.Ambient = Color3.fromRGB(0,0,0)
+            Lighting.GlobalShadows = true
+        end
+    end
+})
+VisualsTab:Toggle({
+    Title = "Remove Fog",
+    Value = false,
+    Callback = function(v)
+        if v then
+            Lighting.FogEnd = 1e6
+            for _, atm in pairs(Lighting:GetDescendants()) do
+                if atm:IsA("Atmosphere") then atm:Destroy() end
+            end
+        else
+            Lighting.FogEnd = 100000
+        end
+    end
+})
+VisualsTab:Toggle({
+    Title = "Timer Display",
+    Value = false,
+    Callback = function(v)
+        pcall(function()
+            local timer = playerGui:WaitForChild("MainInterface"):WaitForChild("TimerContainer")
+            timer.Visible = v
+        end)
     end
 })
 
@@ -656,7 +710,6 @@ SettingsTab:Input({
         if num and num > 0 then
             currentSettings.GuiWidth = v
             saveConfig()
-            -- Reapply
             if currentSettings.ShowBhopGui == "true" then BhopGuiToggle:Set(true) end
             if currentSettings.ShowAutoCrouchGui == "true" then AutoCrouchGuiToggle:Set(true) end
             if currentSettings.ShowBounceGui == "true" then BounceGuiToggle:Set(true) end
