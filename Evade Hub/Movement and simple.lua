@@ -1,5 +1,5 @@
-if getgenv().MovementHubExecuted then return end
-getgenv().MovementHubExecuted = true
+if getgenv().DaraHubEvadeExecuted then return end
+getgenv().DaraHubEvadeExecuted = true
 
 -- Load WindUI
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
@@ -7,11 +7,11 @@ WindUI.TransparencyValue = 0.2
 WindUI:SetTheme("Dark")
 
 local Window = WindUI:CreateWindow({
-    Title = "Movement Hub",
-    Icon = "rocket",
-    Author = "Made by Pnsdg & Yomka",
+    Title = "Dara Hub",
+    Icon = "rbxassetid://137330250139083",
+    Author = "Made by Pnsdg And Yomka",
     Folder = "GameHackUI",
-    Size = UDim2.fromOffset(580, 450),
+    Size = UDim2.fromOffset(580, 490),
     Theme = "Dark"
 })
 
@@ -28,12 +28,12 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- Config
 local configFileName = "movement_hub_final.txt"
 
--- Default settings (ApplyMode kosong!)
+-- Default settings
 local currentSettings = {
     Speed = "1500",
     JumpCap = "1",
     StrafeAcceleration = "187",
-    ApplyMode = "", -- <-- KOSONG, tidak otomatis pilih
+    ApplyMode = "",  -- KOSONG — tidak otomatis pilih
     Bhop = "false",
     AutoCrouch = "false",
     AutoCrouchMode = "Air",
@@ -74,7 +74,7 @@ local function saveConfig()
     writefile(configFileName, HttpService:JSONEncode(currentSettings))
 end
 
--- === GAME TABLES SYSTEM ===
+-- === GET GAME TABLES ===
 local requiredFields = {
     Friction = true,
     AirStrafeAcceleration = true,
@@ -125,7 +125,7 @@ local function applyToTables(callback)
 end
 
 local function applyStoredSettings()
-    if currentSettings.ApplyMode == "" then return end -- jangan apply jika belum dipilih
+    if currentSettings.ApplyMode == "" then return end
     applyToTables(function(obj)
         obj.Speed = tonumber(currentSettings.Speed) or 1500
         obj.JumpCap = tonumber(currentSettings.JumpCap) or 1
@@ -247,31 +247,50 @@ task.spawn(function()
     end
 end)
 
--- === INFINITY SLIDE ===
-local slideConnection = nil
-local slideTables = nil
-
-local function setupInfinitySlide()
-    if currentSettings.InfinitySlide == "true" then
-        slideTables = getConfigTables()
-        slideConnection = RunService.Heartbeat:Connect(function()
-            if not slideTables then return end
-            local friction = tonumber(currentSettings.SlideFriction) or -8
-            for _, tbl in ipairs(slideTables) do
-                pcall(function()
-                    tbl.Friction = friction
-                end)
-            end
-        end)
-    else
-        if slideConnection then
-            slideConnection:Disconnect()
-            slideConnection = nil
-        end
-        slideTables = nil
-        -- Reset ke default jika diinginkan
-        applyStoreSettings()
+-- === INFINITY SLIDE (FIXED) ===
+local function isSliding(character)
+    if not character or not character:FindFirstChild("HumanoidRootPart") or not character:FindFirstChild("Humanoid") then
+        return false
     end
+    local hrp = character.HumanoidRootPart
+    local humanoid = character.Humanoid
+    local isAir = humanoid.FloorMaterial == Enum.Material.Air
+    local speed = hrp.Velocity.Magnitude
+    return isAir and speed > 50
+end
+
+local function setSlideFriction(value)
+    local tables = getConfigTables()
+    for _, tbl in ipairs(tables) do
+        pcall(function()
+            tbl.Friction = value
+        end)
+    end
+end
+
+local slideHeartbeat = nil
+
+local function startInfinitySlide()
+    if slideHeartbeat then slideHeartbeat:Disconnect() end
+    slideHeartbeat = RunService.Heartbeat:Connect(function()
+        if currentSettings.InfinitySlide == "true" then
+            if isSliding(player.Character) then
+                setSlideFriction(tonumber(currentSettings.SlideFriction) or -8)
+            else
+                setSlideFriction(5)
+            end
+        else
+            setSlideFriction(5)
+        end
+    end)
+end
+
+local function stopInfinitySlide()
+    if slideHeartbeat then
+        slideHeartbeat:Disconnect()
+        slideHeartbeat = nil
+    end
+    setSlideFriction(5)
 end
 
 -- === DRAGGABLE ===
@@ -353,10 +372,10 @@ end
 -- === UI SETUP ===
 local FeatureSection = Window:Section({ Title = "Movement", Opened = true })
 local MainTab = FeatureSection:Tab({ Title = "Main", Icon = "user" })
-local VisualsTab = FeatureSection:Tab({ Title = "Visuals", Icon = "camera" })
+local UtilityTab = FeatureSection:Tab({ Title = "Utility", Icon = "wrench" })
 local SettingsTab = FeatureSection:Tab({ Title = "Settings", Icon = "settings" })
 
--- === MOVEMENT FEATURES ===
+-- === MAIN TAB: Movement Features ===
 MainTab:Section({ Title = "Core Movement" })
 MainTab:Input({
     Title = "Speed",
@@ -401,7 +420,7 @@ MainTab:Dropdown({
     end
 })
 
--- === BHOP ===
+-- Bhop
 MainTab:Section({ Title = "Bhop" })
 MainTab:Toggle({
     Title = "Enable Bhop",
@@ -435,7 +454,7 @@ MainTab:Input({
     end
 })
 
--- === AUTO CROUCH ===
+-- Auto Crouch
 MainTab:Section({ Title = "Auto Crouch" })
 MainTab:Toggle({
     Title = "Enable Auto Crouch",
@@ -455,7 +474,7 @@ MainTab:Dropdown({
     end
 })
 
--- === BOUNCE ===
+-- Bounce
 MainTab:Section({ Title = "Bounce" })
 MainTab:Toggle({
     Title = "Enable Bounce",
@@ -490,14 +509,18 @@ MainTab:Input({
     end
 })
 
--- === INFINITY SLIDE ===
-MainTab:Section({ Title = "Infinity Slide" })
+-- Infinite Slide
+MainTab:Section({ Title = "Infinite Slide" })
 MainTab:Toggle({
-    Title = "Enable Infinity Slide",
+    Title = "Enable Infinite Slide",
     Value = currentSettings.InfinitySlide == "true",
     Callback = function(v)
         currentSettings.InfinitySlide = tostring(v)
-        setupInfinitySlide()
+        if v then
+            startInfinitySlide()
+        else
+            stopInfinitySlide()
+        end
         saveConfig()
     end
 })
@@ -505,23 +528,24 @@ MainTab:Input({
     Title = "Slide Friction (Negative)",
     Value = currentSettings.SlideFriction,
     Callback = function(v)
-        if v:sub(1,1) == "-" and tonumber(v) then
+        if v:sub(1,1) == "-" then
             currentSettings.SlideFriction = v
             if currentSettings.InfinitySlide == "true" then
-                setupInfinitySlide()
+                startInfinitySlide()
             end
             saveConfig()
         end
     end
 })
 
--- === LAG SWITCH ===
+-- Lag Switch
 MainTab:Section({ Title = "Lag Switch" })
 MainTab:Toggle({
     Title = "Enable Lag Switch",
     Value = currentSettings.LagSwitch == "true",
     Callback = function(v)
         currentSettings.LagSwitch = tostring(v)
+        getgenv().lagSwitchEnabled = v
         saveConfig()
     end
 })
@@ -532,6 +556,7 @@ MainTab:Input({
         local num = tonumber(v)
         if num and num > 0 then
             currentSettings.LagDuration = v
+            getgenv().lagDuration = num
             saveConfig()
         end
     end
@@ -540,7 +565,7 @@ MainTab:Input({
 -- === FLOATING GUI TOGGLES (di MainTab) ===
 MainTab:Section({ Title = "Floating GUI" })
 
--- Bhop
+-- Bhop GUI Toggle
 local BhopGuiToggle = MainTab:Toggle({
     Title = "Show Bhop Button",
     Value = currentSettings.ShowBhopGui == "true",
@@ -569,7 +594,7 @@ local BhopGuiToggle = MainTab:Toggle({
     end
 })
 
--- Auto Crouch
+-- Auto Crouch GUI Toggle
 local AutoCrouchGuiToggle = MainTab:Toggle({
     Title = "Show Auto Crouch Button",
     Value = currentSettings.ShowAutoCrouchGui == "true",
@@ -597,7 +622,7 @@ local AutoCrouchGuiToggle = MainTab:Toggle({
     end
 })
 
--- Bounce
+-- Bounce GUI Toggle
 local BounceGuiToggle = MainTab:Toggle({
     Title = "Show Bounce Button",
     Value = currentSettings.ShowBounceGui == "true",
@@ -631,23 +656,28 @@ local BounceGuiToggle = MainTab:Toggle({
     end
 })
 
--- Infinity Slide
+-- Infinity Slide GUI Toggle
 local InfinitySlideGuiToggle = MainTab:Toggle({
     Title = "Show Infinity Slide Button",
     Value = currentSettings.ShowInfinitySlideGui == "true",
     Callback = function(v)
         currentSettings.ShowInfinitySlideGui = tostring(v)
         if v then
-            createFloatingGui("InfinitySlideGui", "Infinity Slide", {
+            createFloatingGui("InfinitySlideGui", "Infinite Slide", {
                 text = currentSettings.InfinitySlide == "true" and "On" or "Off",
                 bgColor = currentSettings.InfinitySlide == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0),
                 onClick = function()
-                    currentSettings.InfinitySlide = currentSettings.InfinitySlide == "true" and "false" or "true"
-                    setupInfinitySlide()
+                    local newState = currentSettings.InfinitySlide == "true" and "false" or "true"
+                    currentSettings.InfinitySlide = newState
+                    if newState == "true" then
+                        startInfinitySlide()
+                    else
+                        stopInfinitySlide()
+                    end
                     local btn = playerGui.InfinitySlideGui.Frame:FindFirstChildOfClass("TextButton")
                     if btn then
-                        btn.Text = currentSettings.InfinitySlide == "true" and "On" or "Off"
-                        btn.BackgroundColor3 = currentSettings.InfinitySlide == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0)
+                        btn.Text = newState == "true" and "On" or "Off"
+                        btn.BackgroundColor3 = newState == "true" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(255, 0, 0)
                     end
                     saveConfig()
                 end
@@ -660,7 +690,7 @@ local InfinitySlideGuiToggle = MainTab:Toggle({
     end
 })
 
--- Lag Switch
+-- Lag Switch GUI Toggle
 local LagSwitchGuiToggle = MainTab:Toggle({
     Title = "Show Lag Switch Button",
     Value = currentSettings.ShowLagSwitchGui == "true",
@@ -673,7 +703,7 @@ local LagSwitchGuiToggle = MainTab:Toggle({
                 onClick = function()
                     task.spawn(function()
                         local start = tick()
-                        local duration = tonumber(currentSettings.LagDuration) or 0.5
+                        local duration = getgenv().lagDuration or 0.5
                         while tick() - start < duration do
                             local a = math.random(1e6) * math.random(1e6)
                             a = a / math.random(1e4)
@@ -689,44 +719,72 @@ local LagSwitchGuiToggle = MainTab:Toggle({
     end
 })
 
--- === VISUALS TAB ===
-VisualsTab:Toggle({
-    Title = "FullBright",
-    Value = false,
-    Callback = function(v)
-        Lighting.Brightness = v and 2 or 1
-        Lighting.OutdoorAmbient = v and Color3.fromRGB(255,255,255) or Color3.fromRGB(0,0,0)
-        Lighting.Ambient = v and Color3.fromRGB(255,255,255) or Color3.fromRGB(0,0,0)
-        Lighting.GlobalShadows = not v
-    end
-})
-VisualsTab:Toggle({
-    Title = "Remove Fog",
-    Value = false,
-    Callback = function(v)
-        if v then
-            Lighting.FogEnd = 1e6
-            for _, atm in pairs(Lighting:GetDescendants()) do
-                if atm:IsA("Atmosphere") then atm:Destroy() end
+-- === UTILITY TAB ===
+UtilityTab:Section({ Title = "Performance & Visuals" })
+
+-- Remove Textures
+UtilityTab:Button({
+    Title = "Remove Textures",
+    Callback = function()
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.Material = Enum.Material.SmoothPlastic
+                obj.Color = Color3.fromRGB(200, 200, 200)
             end
-        else
-            Lighting.FogEnd = 100000
+            if obj:IsA("Decal") or obj:IsA("Texture") then
+                obj.Texture = ""
+            end
         end
+        WindUI:Notify({ Title = "Textures Removed", Content = "All textures cleared.", Duration = 2 })
     end
 })
-VisualsTab:Toggle({
-    Title = "Timer Display",
-    Value = false,
-    Callback = function(v)
-        pcall(function()
-            local timer = playerGui:WaitForChild("MainInterface"):WaitForChild("TimerContainer")
-            timer.Visible = v
-        end)
+
+-- Low Graphics
+UtilityTab:Button({
+    Title = "Low Graphics",
+    Callback = function()
+        -- Matikan efek
+        for _, eff in ipairs(Lighting:GetChildren()) do
+            if eff:IsA("PostProcessingEffect") or eff:IsA("BloomEffect") or eff:IsA("BlurEffect") then
+                eff.Enabled = false
+            end
+        end
+        Lighting.FogEnd = 1e6
+        Lighting.GlobalShadows = false
+        Lighting.Brightness = 2
+        Lighting.Ambient = Color3.fromRGB(128,128,128)
+        -- Hapus partikel
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("ParticleEmitter") or obj:IsA("Fire") or obj:IsA("Smoke") then
+                obj.Enabled = false
+            end
+        end
+        WindUI:Notify({ Title = "Low Graphics", Content = "Visuals optimized.", Duration = 2 })
+    end
+})
+
+-- Clear Invis Walls
+UtilityTab:Button({
+    Title = "Clear Invis Walls",
+    Callback = function()
+        local invisParts = workspace:FindFirstChild("Game")?.Map?.InvisParts
+        if invisParts then
+            local count = 0
+            for _, part in ipairs(invisParts:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                    count += 1
+                end
+            end
+            WindUI:Notify({ Title = "Invis Walls", Content = "Disabled " .. count .. " parts.", Duration = 2 })
+        else
+            WindUI:Notify({ Title = "Error", Content = "InvisParts not found.", Duration = 2 })
+        end
     end
 })
 
 -- === SETTINGS TAB ===
-SettingsTab:Section({ Title = "GUI Size" })
+SettingsTab:Section({ Title = "Floating GUI Size" })
 SettingsTab:Input({
     Title = "GUI Width",
     Value = currentSettings.GuiWidth,
@@ -779,7 +837,7 @@ end)
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/More-loadstring.lua"))()
 
 WindUI:Notify({
-    Title = "Movement Hub",
+    Title = "Dara Hub",
     Content = "Loaded successfully!",
     Duration = 3
 })
