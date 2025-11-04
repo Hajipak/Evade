@@ -1,5 +1,5 @@
-if getgenv().DaraHubEvadeExecuted then return end
-getgenv().DaraHubEvadeExecuted = true
+if getgenv().MovementHubEvadeExecuted then return end
+getgenv().MovementHubEvadeExecuted = true
 
 -- Load WindUI
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
@@ -7,7 +7,7 @@ WindUI.TransparencyValue = 0.2
 WindUI:SetTheme("Dark")
 
 local Window = WindUI:CreateWindow({
-    Title = "Dara Hub",
+    Title = "Movement Hub",
     Icon = "rbxassetid://137330250139083",
     Author = "Made by Pnsdg And Yomka",
     Folder = "GameHackUI",
