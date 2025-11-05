@@ -26,7 +26,7 @@ local Localization = WindUI:Localization({
     Translations = {
         ["en"] = {
             ["SCRIPT_TITLE"] = "Zen Hub",
-            ["WELCOME"] = "Made by: Zen",
+            ["WELCOME"] = "Made by: Pnsdg And Yomka",
             ["FEATURES"] = "Features",
             ["Player_TAB"] = "Player",
             ["AUTO_TAB"] = "Auto",
@@ -110,196 +110,9 @@ featureStates = featureStates or {}
 if featureStates.DisableCameraShake == nil then
     featureStates.DisableCameraShake = false
 end
-local currentKey = Enum.KeyCode.RightControl 
-local keyConnection = nil
-local isListeningForInput = false
-local keyInputConnection = nil
-
-local keyBindButton = nil
-
-local keybindFile = "keybind_config.txt"
-
-local function getCleanKeyName(keyCode)
-    local keyString = tostring(keyCode)
-    return keyString:gsub("Enum%.KeyCode%.", "")
-end
-
-local function saveKeybind()
-    local keyString = tostring(currentKey)
-    writefile(keybindFile, keyString)
-end
-
-local function loadKeybind()
-    if isfile(keybindFile) then
-        local savedKey = readfile(keybindFile)
-        for _, key in pairs(Enum.KeyCode:GetEnumItems()) do
-            if tostring(key) == savedKey then
-                currentKey = key
-                return true
-            end
-        end
-    end
-    return false
-end
-
-loadKeybind()
-
-local function updateKeybindButtonDesc()
-    if not keyBindButton then return false end
-    local desc = "Current Key: " .. getCleanKeyName(currentKey)
-    local success = false
-
-    local methods = {
-        function()
-            if type(keyBindButton.SetDesc) == "function" then
-                keyBindButton:SetDesc(desc)
-            else
-                error("no SetDesc")
-            end
-        end,
-        function()
-            if type(keyBindButton.Set) == "function" then
-                keyBindButton:Set("Desc", desc)
-            else
-                error("no Set")
-            end
-        end,
-        function()
-            if keyBindButton.Desc ~= nil then
-                keyBindButton.Desc = desc
-            else
-                error("no Desc property")
-            end
-        end,
-        function()
-            if type(keyBindButton.SetDescription) == "function" then
-                keyBindButton:SetDescription(desc)
-            else
-                error("no SetDescription")
-            end
-        end,
-        function()
-            if type(keyBindButton.SetValue) == "function" then
-                keyBindButton:SetValue(desc)
-            else
-                error("no SetValue")
-            end
-        end
-    }
-
-    for _, fn in ipairs(methods) do
-        local ok = pcall(fn)
-        if ok then
-            success = true
-            break
-        end
-    end
-
-    if not success then
-        pcall(function()
-            WindUI:Notify({
-                Title = "Keybind",
-                Content = desc,
-                Duration = 2
-            })
-        end)
-    end
-
-    return success
-end
-
-local function bindKey(keyBindButtonParam)
-    local targetButton = keyBindButtonParam or keyBindButton
-
-    if isListeningForInput then 
-        isListeningForInput = false
-        if keyConnection then
-            keyConnection:Disconnect()
-            keyConnection = nil
-        end
-        WindUI:Notify({
-            Title = "Keybind",
-            Content = "Key binding cancelled",
-            Duration = 2
-        })
-        return
-    end
-    
-    isListeningForInput = true
-    WindUI:Notify({
-        Title = "Keybind",
-        Content = "Press any key to bind...",
-        Duration = 3
-    })
-    
-    keyConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            currentKey = input.KeyCode
-            isListeningForInput = false
-            if keyConnection then
-                keyConnection:Disconnect()
-                keyConnection = nil
-            end
-            
-            saveKeybind()
-            
-            WindUI:Notify({
-                Title = "Keybind",
-                Content = "Key bound to: " .. getCleanKeyName(currentKey),
-                Duration = 3
-            })
-            pcall(function()
-                updateKeybindButtonDesc()
-            end)
-        end
-    end)
-end
-
-local function handleKeyPress(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == currentKey then
-        local success, isVisible = pcall(function()
-            if Window and type(Window.IsOpen) == "function" then
-                return Window:IsOpen()
-            elseif Window and Window.Opened ~= nil then
-                return Window.Opened
-            else
-                return isWindowOpen
-            end
-        end)
-        if not success then
-            isVisible = isWindowOpen
-        end
-
-        if isVisible then
-            if Window and type(Window.Close) == "function" then
-                pcall(function() Window:Close() end)
-            else
-                isWindowOpen = false
-                if Window and type(Window.OnClose) == "function" then
-                    pcall(function() Window:OnClose() end)
-                end
-            end
-        else
-            if Window and type(Window.Open) == "function" then
-                pcall(function() Window:Open() end)
-            else
-                isWindowOpen = true
-                if Window and type(Window.OnOpen) == "function" then
-                    pcall(function() Window:OnOpen() end)
-                end
-            end
-        end
-    end
-end
-
-keyInputConnection = game:GetService("UserInputService").InputBegan:Connect(handleKeyPress)
 Window:SetIconSize(48)
 Window:Tag({
-    Title = "v1.2.6",
+    Title = "v1.2.8",
     Color = Color3.fromHex("#30ff6a")
 })
 
@@ -981,6 +794,92 @@ local featureStates = {
     TimerDisplay = false
 }
 -- Variables
+local Events = ReplicatedStorage:WaitForChild("Events",10)
+local CharacterFolder = Events:WaitForChild("Character",10)
+local EmoteRemote = CharacterFolder:WaitForChild("Emote",10)
+local PassCharacterInfo = CharacterFolder:WaitForChild("PassCharacterInfo",10)
+
+local remoteSignal = PassCharacterInfo and PassCharacterInfo.OnClientEvent
+local currentTag = nil
+local currentEmotes = table.create(12,"")
+local selectEmotes = table.create(12,"")
+local emoteEnabled = table.create(12,false)
+
+local function readTagFromFolder(f)
+    local a = f:GetAttribute("Tag")
+    if a ~= nil then return a end
+    local o = f:FindFirstChild("Tag")
+    if o and o:IsA("ValueBase") then return o.Value end
+    return nil
+end
+
+local function onRespawn()
+    repeat task.wait() until workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Players")
+    local pf = workspace.Game.Players:WaitForChild(player.Name,10)
+    if not pf then warn("Player folder missing after respawn"); currentTag=nil; return end
+    currentTag = readTagFromFolder(pf)
+    if currentTag then
+        local b = tonumber(currentTag)
+        if b and b>=0 and b<=255 then
+            print(string.format("Respawn to TAG captured: %d",b))
+        else
+            warn(string.format("Respawn to Invalid TAG: %s",tostring(currentTag)))
+            currentTag=nil
+        end
+    else
+        print("Respawn to No TAG found")
+        currentTag=nil
+    end
+end
+
+local pendingSlot = nil
+local function fireSelect(slot)
+    if not currentTag then return end
+    local b = tonumber(currentTag)
+    local buf = buffer.create(2)
+    buffer.writeu8(buf,0,b)
+    buffer.writeu8(buf,1,17)
+    if remoteSignal then
+        firesignal(remoteSignal,buf,{selectEmotes[slot]})
+        print(string.format("Fired %s with byte \\%d\\17 (TAG=%d)",selectEmotes[slot],b,b))
+    end
+end
+
+if PassCharacterInfo then
+    PassCharacterInfo.OnClientEvent:Connect(function()
+        if not pendingSlot then return end
+        fireSelect(pendingSlot)
+        pendingSlot = nil
+    end)
+
+    local oldNamecall
+    oldNamecall = hookmetamethod(game,"__namecall",function(self,...)
+        local m = getnamecallmethod()
+        local a = {...}
+        if m=="FireServer" and self==EmoteRemote and type(a[1])=="string" then
+            for i=1,12 do
+                if emoteEnabled[i] and currentEmotes[i]~="" and a[1]==currentEmotes[i] then
+                    pendingSlot = i
+                    print("Detected current emote:",currentEmotes[i],"to waiting for PassCharacterInfo...")
+                    task.spawn(function()
+                        task.wait(0.5)
+                        if pendingSlot == i then
+                            fireSelect(i)
+                            pendingSlot = nil
+                        end
+                    end)
+                    return
+                end
+            end
+        end
+        return oldNamecall(self,...)
+    end)
+
+    if player.Character then
+        onRespawn()
+    end
+    player.CharacterAdded:Connect(onRespawn)
+end
 local character, humanoid, rootPart
 local isJumpHeld = false
 local hasRevived = false
@@ -3397,10 +3296,13 @@ task.spawn(function()
 end)
 
 restartSystemOnEvents()
+
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 Tabs.Main:Section({ Title = "Emote Crouch", TextSize = 20 })
 Tabs.Main:Divider()
+
+math.randomseed(tick())
 
 local emoteInputs = {}
 for i = 1, 12 do
@@ -3447,12 +3349,16 @@ local function triggerRandomEmote()
             table.insert(validEmotes, emoteName)
         end
     end
+    
     if #validEmotes > 0 then
+        math.randomseed(tick() + #validEmotes)
+        
         local ohTable1 = { ["Key"] = "Crouch", ["Down"] = true }
         pcall(function()
             player.PlayerScripts.Events.temporary_events.UseKeybind:Fire(ohTable1)
         end)
-        local randomEmote = validEmotes[math.random(1, #validEmotes)]
+        local randomIndex = math.random(1, #validEmotes)
+        local randomEmote = validEmotes[randomIndex]
         pcall(function()
             ReplicatedStorage.Events.Character.Emote:FireServer(randomEmote)
         end)
@@ -3559,7 +3465,6 @@ player.CharacterAdded:Connect(function()
         createEmoteGui(0)
     end
 end)
-
    -- Player Tabs
    Tabs.Player:Section({ Title = "Player", TextSize = 40 })
     Tabs.Player:Divider()
@@ -3790,22 +3695,56 @@ InfiniteSlideToggle = Tabs.Player:Toggle({
     Value = false,
     Callback = function(state)
         infiniteSlideEnabled = state
-        if slideConnection then
-            slideConnection:Disconnect()
-            slideConnection = nil
-        end
+        
         if state then
             cachedTables = getConfigTables()
             updatePlayerModel()
             slideConnection = RunService.Heartbeat:Connect(onHeartbeat)
+            
             LocalPlayer.CharacterAdded:Connect(function()
-                task.wait(0.1)
+                task.wait(0.5)
                 updatePlayerModel()
+                if infiniteSlideEnabled then
+                    cachedTables = getConfigTables()
+                end
             end)
+            
         else
+            if slideConnection then
+                slideConnection:Disconnect()
+                slideConnection = nil
+            end
+            
+            if cachedTables then
+                for _, tableData in ipairs(cachedTables) do
+                    pcall(function()
+                        if tableData.obj and rawget(tableData.obj, "Friction") then
+                            tableData.obj.Friction = 5
+                        end
+                    end)
+                end
+            end
+            
+            local currentTables = getConfigTables()
+            for _, tableObj in ipairs(currentTables) do
+                pcall(function()
+                    if tableObj and rawget(tableObj, "Friction") then
+                        tableObj.Friction = 5
+                    end
+                end)
+            end
+            
+            if plrModel then
+                pcall(function()
+                    local currentState = plrModel:GetAttribute("State")
+                    if currentState == "EmotingSlide" then
+                        plrModel:SetAttribute("State", "Running")
+                    end
+                end)
+            end
+            
             cachedTables = nil
             plrModel = nil
-            setFriction(5)
         end
     end,
 })
@@ -4403,6 +4342,56 @@ TimerDisplayToggle = Tabs.Visuals:Toggle({
         end
     end
 })
+    Tabs.Visuals:Section({ Title = "Emote Changer", TextSize = 20 })
+    Tabs.Visuals:Divider()
+    
+    for i=1,12 do
+        Tabs.Visuals:Input({
+            Title="Current Emote "..i,
+            Placeholder="Enter current emote name",
+            Value=currentEmotes[i],
+            Callback=function(v) 
+                currentEmotes[i]=v:gsub("%s+", "")
+            end
+        })
+    end
+    
+    Tabs.Visuals:Divider()
+    
+    for i=1,12 do
+        Tabs.Visuals:Input({
+            Title="Select Emote "..i,
+            Placeholder="Enter select emote name",
+            Value=selectEmotes[i],
+            Callback=function(v) 
+                selectEmotes[i]=v:gsub("%s+", "")
+            end
+        })
+    end
+    
+    Tabs.Visuals:Button({
+        Title="Apply Emote Mappings",
+        Icon="refresh-cw",
+        Callback=function()
+            for i=1,12 do
+                emoteEnabled[i] = (currentEmotes[i]~="" and selectEmotes[i]~="")
+            end
+            WindUI:Notify({Title="Emote Changer",Content="Emote mappings applied!"})
+        end
+    })
+
+    Tabs.Visuals:Button({
+        Title="Reset All Emotes",
+        Icon="trash-2",
+        Callback=function()
+            for i=1,12 do
+                currentEmotes[i]=""
+                selectEmotes[i]=""
+                emoteEnabled[i]=false
+            end
+            WindUI:Notify({Title="Emote Changer",Content="All emotes reset!"})
+        end
+    })
     -- ESP Tab
     Tabs.ESP:Section({ Title = "ESP", TextSize = 40 })
     Tabs.ESP:Divider()
@@ -5265,15 +5254,165 @@ BoxticketTypeDropdown = Tabs.ESP:Dropdown({
     end
 })
 getgenv().bhopMode = "Acceleration"
-getgenv().bhopAccelValue = -0.1
+getgenv().bhopAccelValue = -0.5
 getgenv().bhopHoldActive = false
+getgenv().autoJumpEnabled = false
+getgenv().jumpCooldown = 0.7
+featureStates = featureStates or {}
 featureStates.BhopGuiVisible = false
+featureStates.Bhop = false
+featureStates.BhopHold = false
+
+local player = game:GetService("Players").LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local Tabs = Tabs or {Auto = {}}
 
 local isMobile = isMobile or UserInputService.TouchEnabled
 
 local bhopConnection = nil
 local bhopLoaded = false
 local bhopKeyConnection = nil
+local characterConnection = nil
+local frictionTables = {}
+
+local Character = nil
+local Humanoid = nil
+local HumanoidRootPart = nil
+local LastJump = 0
+
+local GROUND_CHECK_DISTANCE = 3.5
+local MAX_SLOPE_ANGLE = 45
+local AIR_RANGE = 0.1
+
+local function findFrictionTables()
+    frictionTables = {}
+    for _, t in pairs(getgc(true)) do
+        if type(t) == "table" and rawget(t, "Friction") then
+            table.insert(frictionTables, {obj = t, original = t.Friction})
+        end
+    end
+end
+
+local function setFriction(value)
+    for _, e in ipairs(frictionTables) do
+        if e.obj and type(e.obj) == "table" and rawget(e.obj, "Friction") then
+            e.obj.Friction = value
+        end
+    end
+end
+
+local function resetBhopFriction()
+    for _, e in ipairs(frictionTables) do
+        if e.obj and type(e.obj) == "table" and rawget(e.obj, "Friction") then
+            e.obj.Friction = e.original
+        end
+    end
+    frictionTables = {}
+end
+
+local function applyBhopFriction()
+    if getgenv().bhopMode == "Acceleration" then
+        findFrictionTables()
+        if #frictionTables > 0 then
+            setFriction(getgenv().bhopAccelValue or -0.5)
+        end
+    else
+        resetBhopFriction()
+    end
+end
+
+local function IsOnGround()
+    if not Character or not HumanoidRootPart or not Humanoid then return false end
+
+    local state = Humanoid:GetState()
+    if state == Enum.HumanoidStateType.Jumping or 
+       state == Enum.HumanoidStateType.Freefall or
+       state == Enum.HumanoidStateType.Swimming then
+        return false
+    end
+
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {Character}
+    raycastParams.IgnoreWater = true
+
+    local rayOrigin = HumanoidRootPart.Position
+    local rayDirection = Vector3.new(0, -GROUND_CHECK_DISTANCE, 0)
+    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+
+    if not raycastResult then return false end
+
+    local surfaceNormal = raycastResult.Normal
+    local angle = math.deg(math.acos(surfaceNormal:Dot(Vector3.new(0, 1, 0))))
+
+    return angle <= MAX_SLOPE_ANGLE
+end
+
+local function updateBhop()
+    if not bhopLoaded then return end
+    
+    local character = player.Character
+    local humanoid = character and character:FindFirstChild("Humanoid")
+    if not character or not humanoid then
+        return
+    end
+
+    local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
+
+    if isBhopActive then
+        local now = tick()
+        if IsOnGround() and (now - LastJump) > getgenv().jumpCooldown then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            LastJump = now
+        end
+    end
+end
+
+local function loadBhop()
+    if bhopLoaded then return end
+    
+    bhopLoaded = true
+    
+    if bhopConnection then
+        bhopConnection:Disconnect()
+    end
+    bhopConnection = RunService.Heartbeat:Connect(updateBhop)
+    applyBhopFriction()
+end
+
+local function unloadBhop()
+    if not bhopLoaded then return end
+    
+    bhopLoaded = false
+    
+    if bhopConnection then
+        bhopConnection:Disconnect()
+        bhopConnection = nil
+    end
+    
+    getgenv().bhopHoldActive = false
+    resetBhopFriction()
+end
+
+local function checkBhopState()
+    local shouldLoad = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
+    
+    if shouldLoad then
+        loadBhop()
+    else
+        unloadBhop()
+    end
+end
+
+local function reapplyBhopOnRespawn()
+    if getgenv().autoJumpEnabled or getgenv().bhopHoldActive then
+        wait(0.5)
+        applyBhopFriction()
+        checkBhopState()
+    end
+end
 
 local function makeDraggable(frame)
     frame.Active = true
@@ -5296,77 +5435,6 @@ local function makeDraggable(frame)
             frame.BackgroundTransparency = originalTransparency
         end
     end)
-end
-
-local function updateBhop()
-    if not bhopLoaded then return end
-    
-    local character = player.Character
-    local humanoid = character and character:FindFirstChild("Humanoid")
-    if not character or not humanoid then
-        return
-    end
-
-    local isBhopActive = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
-
-    if isBhopActive and getgenv().bhopMode == "Acceleration" then
-        local friction = getgenv().bhopAccelValue or -0.5
-        for _, t in pairs(getgc(true)) do
-            if type(t) == "table" and rawget(t, "Friction") then
-                t.Friction = friction
-            end
-        end
-    elseif not isBhopActive then
-        for _, t in pairs(getgc(true)) do
-            if type(t) == "table" and rawget(t, "Friction") then
-                t.Friction = 5
-            end
-        end
-    end
-
-    if isBhopActive and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping and humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
-        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end
-
-local function loadBhop()
-    if bhopLoaded then return end
-    
-    bhopLoaded = true
-    
-    if bhopConnection then
-        bhopConnection:Disconnect()
-    end
-    bhopConnection = RunService.Heartbeat:Connect(updateBhop)
-end
-
-local function unloadBhop()
-    if not bhopLoaded then return end
-    
-    bhopLoaded = false
-    
-    if bhopConnection then
-        bhopConnection:Disconnect()
-        bhopConnection = nil
-    end
-    
-    for _, t in pairs(getgc(true)) do
-        if type(t) == "table" and rawget(t, "Friction") then
-            t.Friction = 5
-        end
-    end
-    
-    getgenv().bhopHoldActive = false
-end
-
-local function checkBhopState()
-    local shouldLoad = getgenv().autoJumpEnabled or getgenv().bhopHoldActive
-    
-    if shouldLoad and not bhopLoaded then
-        loadBhop()
-    elseif not shouldLoad and bhopLoaded then
-        unloadBhop()
-    end
 end
 
 local function setupBhopKeybind()
@@ -5499,8 +5567,28 @@ local jumpGui, jumpToggleBtn = createBhopGui(0.12)
 setupJumpButton()
 setupBhopKeybind()
 
-player.CharacterAdded:Connect(function()
+RunService.Heartbeat:Connect(function()
+    if not Character or not Character:IsDescendantOf(workspace) then
+        Character = player.Character or player.CharacterAdded:Wait()
+        if Character then
+            Humanoid = Character:FindFirstChildOfClass("Humanoid")
+            HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+        else
+            Humanoid = nil
+            HumanoidRootPart = nil
+        end
+    end
+end)
+
+if characterConnection then
+    characterConnection:Disconnect()
+end
+characterConnection = player.CharacterAdded:Connect(function(character)
+    Character = character
+    Humanoid = character:WaitForChild("Humanoid")
+    HumanoidRootPart = character:WaitForChild("HumanoidRootPart")
     setupJumpButton()
+    reapplyBhopOnRespawn()
 end)
 
 BhopToggle = Tabs.Auto:Toggle({
@@ -5548,9 +5636,10 @@ BhopShortcutToggle = Tabs.Auto:Toggle({
 BhopModeDropdown = Tabs.Auto:Dropdown({
     Title = "Bhop Mode",
     Values = {"Acceleration", "No Acceleration"},
-    Value = "Noo Acceleration",
+    Value = "Acceleration",
     Callback = function(value)
         getgenv().bhopMode = value
+        checkBhopState()
     end
 })
 
@@ -5563,7 +5652,22 @@ BhopAccelInput = Tabs.Auto:Input({
             local n = tonumber(value)
             if n then
                 getgenv().bhopAccelValue = n
+                if getgenv().autoJumpEnabled or getgenv().bhopHoldActive then
+                    applyBhopFriction()
+                end
             end
+        end
+    end
+})
+
+JumpCooldownInput = Tabs.Auto:Input({
+    Title = "Jump Cooldown (Seconds)",
+    Placeholder = "0.7",
+    Numeric = true,
+    Callback = function(value)
+        local n = tonumber(value)
+        if n and n > 0 then
+            getgenv().jumpCooldown = n
         end
     end
 })
@@ -5592,24 +5696,15 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
         if bhopKeyConnection then
             bhopKeyConnection:Disconnect()
         end
+        if characterConnection then
+            characterConnection:Disconnect()
+        end
     end
 end)
 
 checkBhopState()
-if not featureStates then
-    featureStates = {
-        AutoCrouch = false,
-        AutoCrouchMode = "Air"
-    }
-end
 
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
-getgenv().crouchGuiVisible = not UserInputService.KeyboardEnabled
+getgenv().crouchGuiVisible = false
 
 local previousCrouchState = false
 local spamDown = true
@@ -5718,19 +5813,11 @@ local function createCrouchGui(yOffset)
     guiInstance = crouchGui
 end
 
-local function startAutoCrouch()
-    featureStates.AutoCrouch = true
-    previousCrouchState = false
-    spamDown = true
-
-    if not guiInstance then
-        createCrouchGui()
-    else
-        guiInstance.Enabled = getgenv().crouchGuiVisible
-    end
-
+-- Setup persistent listeners (always running, but gated by feature state or visibility)
+local function setupAutoCrouchListeners()
     if crouchConnection then crouchConnection:Disconnect() end
     crouchConnection = RunService.Heartbeat:Connect(function()
+        if not featureStates.AutoCrouch then return end
         local character = Players.LocalPlayer.Character
         if not character or not character:FindFirstChild("Humanoid") then return end
 
@@ -5753,7 +5840,7 @@ local function startAutoCrouch()
     if keybindConnection then keybindConnection:Disconnect() end
     keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.C then
+        if input.KeyCode == Enum.KeyCode.C and getgenv().crouchGuiVisible then
             featureStates.AutoCrouch = not featureStates.AutoCrouch
             local gui = playerGui:FindFirstChild("CrouchGui")
             if gui then
@@ -5772,37 +5859,24 @@ local function startAutoCrouch()
     end)
 end
 
-local function stopAutoCrouch()
-    featureStates.AutoCrouch = false
-    if previousCrouchState then
-        fireKeybind(false, "Crouch")
-        previousCrouchState = false
-    end
-
-    if crouchConnection then
-        crouchConnection:Disconnect()
-        crouchConnection = nil
-    end
-
-    if keybindConnection then
-        keybindConnection:Disconnect()
-        keybindConnection = nil
-    end
-
-    if guiInstance then
-        guiInstance.Enabled = false
-    end
-end
+setupAutoCrouchListeners()
 
 AutoCrouchToggle = Tabs.Auto:Toggle({
     Title = "Auto Crouch",
     Desc = "Press C to toggle if you on keyboard",
     Value = false,
     Callback = function(state)
+        getgenv().crouchGuiVisible = state
         if state then
-            startAutoCrouch()
+            if not guiInstance then
+                createCrouchGui()
+            else
+                guiInstance.Enabled = true
+            end
         else
-            stopAutoCrouch()
+            if guiInstance then
+                guiInstance.Enabled = false
+            end
         end
     end
 })
@@ -5814,9 +5888,6 @@ AutoCrouchModeDropdown = Tabs.Auto:Dropdown({
         featureStates.AutoCrouchMode = value
     end
 })
-
-
-getgenv().autoCarryGuiVisible = false
 
 
 local Players = game:GetService("Players")
@@ -7446,23 +7517,16 @@ Tabs.Teleport:Button({
             Color = "White"
         })
     end
-
-
-    Tabs.Settings:Section({ Title = "Keybind Settings", TextSize = 20 })
-    Tabs.Settings:Section({ Title = "Change toggle key for GUI", TextSize = 16, TextTransparency = 0.25 })
-    Tabs.Settings:Divider()
-
-    keyBindButton = Tabs.Settings:Button({
+        Tabs.Settings:Keybind({
+        Flag = "Keybind",
         Title = "Keybind",
-        Desc = "Current Key: " .. getCleanKeyName(currentKey),
-        Icon = "key",
-        Variant = "Primary",
-        Callback = function()
-            bindKey(keyBindButton)
+        Desc = "Keybind to open ui",
+        Value = "RightControl",
+        Callback = function(RightControl)
+            Window:SetToggleKey(Enum.KeyCode[RightControl])
         end
     })
 
-    pcall(updateKeybindButtonDesc)
 Tabs.Settings:Section({ Title = "Game Settings (In Beta)", TextSize = 35 })
 Tabs.Settings:Section({ Title = "Note: This is a permanent Changes, it's can be used to pass limit value", TextSize = 15 })
 Tabs.Settings:Divider()
