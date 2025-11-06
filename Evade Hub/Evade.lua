@@ -74,7 +74,7 @@ local Localization = WindUI:Localization({
 WindUI.TransparencyValue = 0.2
 WindUI:SetTheme("Dark")
 
--- Create WindUI window
+-- Create WindUI window (Initially Hidden - This is GUI v1)
 local Window = WindUI:CreateWindow({
     Title = "loc:SCRIPT_TITLE",
     Icon = "rbxassetid://137330250139083",
@@ -87,35 +87,22 @@ local Window = WindUI:CreateWindow({
     HideSearchBar = false,
     SideBarWidth = 200
 })
-local isWindowOpen = false
-local function updateWindowOpenState()
-    if Window and type(Window.IsOpen) == "function" then
-        local ok, val = pcall(function() return Window:IsOpen() end)
-        if ok and type(val) == "boolean" then
-            isWindowOpen = val
-            return
-        end
-    end
-    if Window and Window.Opened ~= nil then
-        isWindowOpen = Window.Opened
-        return
-    end
-    isWindowOpen = isWindowOpen or false
-end
-pcall(updateWindowOpenState)
+Window:Toggle(false) -- Make sure it's hidden initially
 
--- Variables
+-- Variables for feature states
 local featureStates = featureStates or {}
-featureStates.DisableCameraShake = false
+featureStates.ShowGUIv1 = false -- Toggle for main GUI (v1) visibility
+featureStates.ShowGUIv2 = false -- Toggle for second GUI (v2) visibility
+featureStates.BhopGuiVisible = false -- Toggle for Bhop GUI visibility (for keybind and mobile button)
 featureStates.AutoCrouch = false
-featureStates.AutoCrouchMode = "Air"
 featureStates.BounceEnabled = false
-featureStates.BounceHeight = 0
-featureStates.BounceEpsilon = 0.1
 featureStates.LagSwitchEnabled = false
 featureStates.LagDuration = 0.5
-featureStates.ShowGUI = true -- Toggle for main GUI visibility
-featureStates.ShowGUITwo = true -- Toggle for second GUI (Bhop, Bounce, AutoCrouch buttons) visibility
+featureStates.FullBright = false
+featureStates.NoFog = false
+featureStates.TimerDisplay = false
+featureStates.BounceHeight = 0
+featureStates.BounceEpsilon = 0.1
 
 -- Services
 local Players = game:GetService("Players")
@@ -126,19 +113,14 @@ local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local workspace = game:GetService("Workspace")
 local originalGameGravity = workspace.Gravity
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local MarketplaceService = game:GetService("MarketplaceService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-local placeId = game.PlaceId
-local jobId = game.JobId
 
 -- Global variables for GUI sizes
-local mainGuiSizeX = 580
-local mainGuiSizeY = 490
-local guiTwoSizeX = 60
-local guiTwoSizeY = 60
+local guiV1SizeX = 580
+local guiV1SizeY = 490
+local guiV2SizeX = 60
+local guiV2SizeY = 60
 
 -- Function to make a frame draggable
 local function makeDraggable(frame)
@@ -160,20 +142,24 @@ local function makeDraggable(frame)
     end)
 end
 
--- Function to create the second GUI (Bhop, Bounce, AutoCrouch buttons)
-local function createSecondGUI(yOffset)
-    local guiName = "SecondGUI"
+-- =========================
+-- === GUI v2: Button Panel ===
+-- =========================
+
+-- Function to create the second GUI (Bhop, Bounce, Auto Crouch buttons) - This is GUI v2
+local function createGUIv2(yOffset)
+    local guiName = "GUIv2"
     local guiOld = playerGui:FindFirstChild(guiName)
     if guiOld then guiOld:Destroy() end
     local gui = Instance.new("ScreenGui")
     gui.Name = guiName
     gui.IgnoreGuiInset = true
     gui.ResetOnSpawn = false
-    gui.Enabled = featureStates.ShowGUITwo
+    gui.Enabled = featureStates.ShowGUIv2
     gui.Parent = playerGui
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, guiTwoSizeX, 0, guiTwoSizeY)
-    frame.Position = UDim2.new(0.5, -guiTwoSizeX/2, 0.12 + (yOffset or 0), 0)
+    frame.Size = UDim2.new(0, guiV2SizeX, 0, guiV2SizeY)
+    frame.Position = UDim2.new(0.5, -guiV2SizeX/2, 0.12 + (yOffset or 0), 0)
     frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     frame.BackgroundTransparency = 0.35
     frame.BorderSizePixel = 0
@@ -304,6 +290,10 @@ local function createSecondGUI(yOffset)
 
     return gui, bhopToggleBtn, bounceToggleBtn, autoCrouchToggleBtn
 end
+
+-- =========================
+-- === Feature Functions ===
+-- =========================
 
 -- Function to enable/disable bounce
 local touchConnections = {}
@@ -535,8 +525,8 @@ local AIR_RANGE = 0.1
 local function findFrictionTables()
     frictionTables = {}
     for _, t in pairs(getgc(true)) do
-        if type(t) == "table" and rawget(t, "Friction") then
-            table.insert(frictionTables, {obj = t, original = t.Friction})
+        if t.obj and type(t.obj) == "table" and rawget(t.obj, "Friction") then
+            table.insert(frictionTables, {obj = t.obj, original = t.original})
         end
     end
 end
@@ -649,8 +639,8 @@ local function setupBhopKeybind()
     if bhopKeyConnection then
         bhopKeyConnection:Disconnect()
     end
-    bhopKeyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-        if gameProcessedEvent then return end
+    bhopKeyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
         if input.KeyCode == Enum.KeyCode.B and featureStates.BhopGuiVisible then
             getgenv().autoJumpEnabled = not getgenv().autoJumpEnabled
             featureStates.Bhop = getgenv().autoJumpEnabled
@@ -702,22 +692,24 @@ player.CharacterAdded:Connect(function(character)
     reapplyBhopOnRespawn()
 end)
 
--- Create the second GUI
-local secondGui, bhopToggleBtn, bounceToggleBtn, autoCrouchToggleBtn = createSecondGUI(0)
-
 -- Setup listeners for auto crouch
 setupAutoCrouchListeners()
 
 -- Setup listeners for lag switch
 checkLagState()
 
--- Create the main GUI
-local function setupGui()
+-- Create GUI v2
+local guiV2, bhopToggleBtn, bounceToggleBtn, autoCrouchToggleBtn = createGUIv2(0)
+
+-- =========================
+-- === GUI v1: Main Window ===
+-- =========================
+
+-- Create the main GUI (v1) - Will be shown/hidden via toggle
+local function setupGUIv1()
     local FeatureSection = Window:Section({ Title = "loc:FEATURES", Opened = true })
     local Tabs = {
-        Main = FeatureSection:Tab({ Title = "Main", Icon = "layout-grid" }),
         Player = FeatureSection:Tab({ Title = "loc:Player_TAB", Icon = "user" }),
-        Auto = FeatureSection:Tab({ Title = "loc:AUTO_TAB", Icon = "repeat-2" }),
         Visuals = FeatureSection:Tab({ Title = "loc:VISUALS_TAB", Icon = "camera" }),
         Settings = FeatureSection:Tab({ Title = "loc:SETTINGS_TAB", Icon = "settings" })
     }
@@ -820,8 +812,8 @@ local function setupGui()
         Value = false,
         Callback = function(state)
             featureStates.BhopGuiVisible = state
-            if secondGui then
-                secondGui.Enabled = state
+            if guiV2 then
+                guiV2.Enabled = state
             end
             setupBhopKeybind()
         end
@@ -1022,12 +1014,12 @@ local function setupGui()
     Tabs.Settings:Section({ Title = "Personalize", TextSize = 20 })
     Tabs.Settings:Divider()
 
-    -- Show GUI Toggle
-    local ShowGUIToggle = Tabs.Settings:Toggle({
-        Title = "Show Main GUI",
-        Value = featureStates.ShowGUI,
+    -- Show GUI v1 Toggle
+    local ShowGUIv1Toggle = Tabs.Settings:Toggle({
+        Title = "Show Main GUI (v1)",
+        Value = featureStates.ShowGUIv1,
         Callback = function(state)
-            featureStates.ShowGUI = state
+            featureStates.ShowGUIv1 = state
             Window:Toggle(state)
             if state then
                 Window:Open()
@@ -1037,75 +1029,75 @@ local function setupGui()
         end
     })
 
-    -- Show GUI Two Toggle
-    local ShowGUITwoToggle = Tabs.Settings:Toggle({
-        Title = "Show Second GUI (Bhop/Bounce/AutoCrouch)",
-        Value = featureStates.ShowGUITwo,
+    -- Show GUI v2 Toggle
+    local ShowGUIv2Toggle = Tabs.Settings:Toggle({
+        Title = "Show Button Panel (v2)",
+        Value = featureStates.ShowGUIv2,
         Callback = function(state)
-            featureStates.ShowGUITwo = state
-            if secondGui then
-                secondGui.Enabled = state
+            featureStates.ShowGUIv2 = state
+            if guiV2 then
+                guiV2.Enabled = state
             end
         end
     })
 
-    -- Main GUI Size Inputs
-    local GuiSizeXInput = Tabs.Settings:Input({
+    -- Main GUI v1 Size Inputs
+    local GuiV1SizeXInput = Tabs.Settings:Input({
         Title = "Main GUI Width (X)",
-        Placeholder = tostring(mainGuiSizeX),
-        Value = tostring(mainGuiSizeX),
+        Placeholder = tostring(guiV1SizeX),
+        Value = tostring(guiV1SizeX),
         NumbersOnly = true,
         Callback = function(value)
             local num = tonumber(value)
             if num and num > 0 then
-                mainGuiSizeX = num
-                Window.Size = UDim2.fromOffset(mainGuiSizeX, mainGuiSizeY)
+                guiV1SizeX = num
+                Window.Size = UDim2.fromOffset(guiV1SizeX, guiV1SizeY)
             end
         end
     })
 
-    local GuiSizeYInput = Tabs.Settings:Input({
+    local GuiV1SizeYInput = Tabs.Settings:Input({
         Title = "Main GUI Height (Y)",
-        Placeholder = tostring(mainGuiSizeY),
-        Value = tostring(mainGuiSizeY),
+        Placeholder = tostring(guiV1SizeY),
+        Value = tostring(guiV1SizeY),
         NumbersOnly = true,
         Callback = function(value)
             local num = tonumber(value)
             if num and num > 0 then
-                mainGuiSizeY = num
-                Window.Size = UDim2.fromOffset(mainGuiSizeX, mainGuiSizeY)
+                guiV1SizeY = num
+                Window.Size = UDim2.fromOffset(guiV1SizeX, guiV1SizeY)
             end
         end
     })
 
-    -- Second GUI Size Inputs
-    local GuiTwoSizeXInput = Tabs.Settings:Input({
-        Title = "Second GUI Width (X)",
-        Placeholder = tostring(guiTwoSizeX),
-        Value = tostring(guiTwoSizeX),
+    -- Button Panel GUI v2 Size Inputs
+    local GuiV2SizeXInput = Tabs.Settings:Input({
+        Title = "Button Panel Width (X)",
+        Placeholder = tostring(guiV2SizeX),
+        Value = tostring(guiV2SizeX),
         NumbersOnly = true,
         Callback = function(value)
             local num = tonumber(value)
             if num and num > 0 then
-                guiTwoSizeX = num
-                if secondGui then
-                    secondGui.Frame.Size = UDim2.new(0, guiTwoSizeX, 0, guiTwoSizeY)
+                guiV2SizeX = num
+                if guiV2 then
+                    guiV2.Frame.Size = UDim2.new(0, guiV2SizeX, 0, guiV2SizeY)
                 end
             end
         end
     })
 
-    local GuiTwoSizeYInput = Tabs.Settings:Input({
-        Title = "Second GUI Height (Y)",
-        Placeholder = tostring(guiTwoSizeY),
-        Value = tostring(guiTwoSizeY),
+    local GuiV2SizeYInput = Tabs.Settings:Input({
+        Title = "Button Panel Height (Y)",
+        Placeholder = tostring(guiV2SizeY),
+        Value = tostring(guiV2SizeY),
         NumbersOnly = true,
         Callback = function(value)
             local num = tonumber(value)
             if num and num > 0 then
-                guiTwoSizeY = num
-                if secondGui then
-                    secondGui.Frame.Size = UDim2.new(0, guiTwoSizeX, 0, guiTwoSizeY)
+                guiV2SizeY = num
+                if guiV2 then
+                    guiV2.Frame.Size = UDim2.new(0, guiV2SizeX, 0, guiV2SizeY)
                 end
             end
         end
@@ -1248,25 +1240,14 @@ local function setupGui()
         end
     })
 
-    -- Keybind for UI
-    Tabs.Settings:Keybind({
-        Flag = "Keybind",
-        Title = "Keybind",
-        Desc = "Keybind to open ui",
-        Value = "RightControl",
-        Callback = function(RightControl)
-            Window:SetToggleKey(Enum.KeyCode[RightControl])
-        end
-    })
-
     Window:SelectTab(1)
 end
 
-setupGui()
+setupGUIv1()
 
--- Handle GUI visibility changes
+-- Handle GUI v1 visibility changes
 Window:OnClose(function()
-    isWindowOpen = false
+    featureStates.ShowGUIv1 = false
     if not game:GetService("UserInputService").TouchEnabled then
         pcall(function()
             WindUI:Notify({
@@ -1280,7 +1261,7 @@ end)
 
 Window:OnOpen(function()
     print("Window opened")
-    isWindowOpen = true
+    featureStates.ShowGUIv1 = true
 end)
 
 -- Ensure GUI size updates are applied
@@ -1324,12 +1305,12 @@ if ConfigManager then
             configFile:Register("FullBrightToggle", FullBrightToggle)
             configFile:Register("NoFogToggle", NoFogToggle)
             configFile:Register("TimerDisplayToggle", TimerDisplayToggle)
-            configFile:Register("ShowGUIToggle", ShowGUIToggle)
-            configFile:Register("ShowGUITwoToggle", ShowGUITwoToggle)
-            configFile:Register("GuiSizeXInput", GuiSizeXInput)
-            configFile:Register("GuiSizeYInput", GuiSizeYInput)
-            configFile:Register("GuiTwoSizeXInput", GuiTwoSizeXInput)
-            configFile:Register("GuiTwoSizeYInput", GuiTwoSizeYInput)
+            configFile:Register("ShowGUIv1Toggle", ShowGUIv1Toggle)
+            configFile:Register("ShowGUIv2Toggle", ShowGUIv2Toggle)
+            configFile:Register("GuiV1SizeXInput", GuiV1SizeXInput)
+            configFile:Register("GuiV1SizeYInput", GuiV1SizeYInput)
+            configFile:Register("GuiV2SizeXInput", GuiV2SizeXInput)
+            configFile:Register("GuiV2SizeYInput", GuiV2SizeYInput)
             configFile:Register("ClearInvisWallButton", ClearInvisWallButton)
             configFile:Register("LowGraphicsButton", LowGraphicsButton)
             configFile:Register("RemoveTextureButton", RemoveTextureButton)
@@ -1392,8 +1373,8 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
         disableBounce()
         unloadBhop()
         unloadLagSystem()
-        if secondGui then
-            secondGui:Destroy()
+        if guiV2 then
+            guiV2:Destroy()
         end
         if lagGui then
             lagGui:Destroy()
