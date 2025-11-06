@@ -1,7 +1,7 @@
-if getgenv().ZenHubEvadeExecuted then
+if getgenv().DaraHubEvadeExecuted then
     return
 end
-getgenv().ZenHubEvadeExecuted = true
+getgenv().DaraHubEvadeExecuted = true
 -- Load WindUI
 local WindUI
 
@@ -25,7 +25,7 @@ local Localization = WindUI:Localization({
     DefaultLanguage = "en",
     Translations = {
         ["en"] = {
-            ["SCRIPT_TITLE"] = "Zen Hub",
+            ["SCRIPT_TITLE"] = "Dara Hub",
             ["WELCOME"] = "Made by: Pnsdg And Yomka",
             ["FEATURES"] = "Features",
             ["Player_TAB"] = "Player",
@@ -112,7 +112,7 @@ if featureStates.DisableCameraShake == nil then
 end
 Window:SetIconSize(48)
 Window:Tag({
-    Title = "v1.2.8",
+    Title = "v1.2.9",
     Color = Color3.fromHex("#30ff6a")
 })
 
@@ -2601,7 +2601,7 @@ Tabs.Main:Button({
        Icon = "server",
        Callback = function()
            local success, result = pcall(function()
-               local script = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Advanced%20Server%20Hop.lua"))()
+               local script = loadstring(game:HttpGet("https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Advanced%20Server%20Hop.lua"))()
            end)
            if not success then
                WindUI:Notify({
@@ -4392,7 +4392,98 @@ TimerDisplayToggle = Tabs.Visuals:Toggle({
             WindUI:Notify({Title="Emote Changer",Content="All emotes reset!"})
         end
     })
-    -- ESP Tab
+    Tabs.Visuals:Section({ Title = "Cosmetics Changer", TextSize = 20 })
+    Tabs.Visuals:Divider()
+    
+    local cosmetic1, cosmetic2 = "" --made by @.scv8 discord server https://discord.gg/RBZVmT6UKs
+    
+    Tabs.Visuals:Input({
+        Title = "Current Cosmetics",
+        Placeholder = "",
+        Callback = function(v) cosmetic1 = v end
+    })
+    
+    Tabs.Visuals:Input({
+        Title = "Select Cosmetics",
+        Placeholder = "",
+        Callback = function(v) cosmetic2 = v end
+    })
+    
+    Tabs.Visuals:Button({
+        Title = "Apply Cosmetics",
+        Callback = function()
+            pcall(function()
+                if cosmetic1 == "" or cosmetic2 == "" or cosmetic1 == cosmetic2 then return end
+                
+                local ReplicatedStorage = game:GetService("ReplicatedStorage")    
+                local Cosmetics = ReplicatedStorage:WaitForChild("Items"):WaitForChild("Cosmetics")    
+                
+                local function normalize(str)    
+                    return str:gsub("%s+", ""):lower()    
+                end    
+                
+                local function levenshtein(s, t)    
+                    local m, n = #s, #t    
+                    local d = {}    
+                    for i = 0, m do d[i] = {[0] = i} end    
+                    for j = 0, n do d[0][j] = j end    
+                    
+                    for i = 1, m do    
+                        for j = 1, n do    
+                            local cost = (s:sub(i,i) == t:sub(j,j)) and 0 or 1    
+                            d[i][j] = math.min(    
+                                d[i-1][j] + 1,    
+                                d[i][j-1] + 1,    
+                                d[i-1][j-1] + cost    
+                            )    
+                        end    
+                    end    
+                    return d[m][n]    
+                end    
+                
+                local function similarity(s, t)    
+                    local nS, nT = normalize(s), normalize(t)    
+                    local dist = levenshtein(nS, nT)    
+                    return 1 - dist / math.max(#nS, #nT)    
+                end    
+                
+                local function findSimilar(name)    
+                    local bestMatch = name    
+                    local bestScore = 0.5    
+                    for _, c in ipairs(Cosmetics:GetChildren()) do    
+                        local score = similarity(name, c.Name)    
+                        if score > bestScore then    
+                            bestScore = score    
+                            bestMatch = c.Name    
+                        end    
+                    end    
+                    return bestMatch    
+                end    
+                
+                cosmetic1 = findSimilar(cosmetic1)    
+                cosmetic2 = findSimilar(cosmetic2)    
+                
+                local a = Cosmetics:FindFirstChild(cosmetic1)    
+                local b = Cosmetics:FindFirstChild(cosmetic2)    
+                if not a or not b then return end    
+                
+                local tempRoot = Instance.new("Folder", Cosmetics)    
+                tempRoot.Name = "__temp_swap_" .. tostring(tick()):gsub("%.", "_")    
+                
+                local tempA = Instance.new("Folder", tempRoot)    
+                local tempB = Instance.new("Folder", tempRoot)    
+                
+                for _, c in ipairs(a:GetChildren()) do c.Parent = tempA end    
+                for _, c in ipairs(b:GetChildren()) do c.Parent = tempB end    
+                
+                for _, c in ipairs(tempA:GetChildren()) do c.Parent = b end    
+                for _, c in ipairs(tempB:GetChildren()) do c.Parent = a end    
+                
+                tempRoot:Destroy()    
+            end)    
+        end
+    })
+     -- ESP Tab
     Tabs.ESP:Section({ Title = "ESP", TextSize = 40 })
     Tabs.ESP:Divider()
     Tabs.ESP:Section({ Title = "Player ESP" })
@@ -6480,25 +6571,7 @@ TimeChangerInput = Tabs.Utility:Input({
             if h and m and h >= 0 and h <= 23 and m >= 0 and m <= 59 and #h_str <= 2 and #m_str <= 2 then
                 local totalHours = h + (m / 60)
                 game:GetService("Lighting").ClockTime = totalHours
-                
-                WindUI:Notify({
-                    Title = "Time Changer",
-                    Content = "Time set to " .. string.format("%02d:%02d", h, m),
-                    Duration = 2
-                })
-            else
-                WindUI:Notify({
-                    Title = "Time Changer",
-                    Content = "Invalid time! Hours: 00-23, Minutes: 00-59 (e.g., 09:30 or 12:00)",
-                    Duration = 3
-                })
-            end
-        else
-            WindUI:Notify({
-                Title = "Time Changer",
-                Content = "Invalid format! Use HH:MM (e.g., 09:30)",
-                Duration = 2
-            })
+             end
         end
     end
 })
@@ -7093,6 +7166,194 @@ local partRadiusInput = Tabs.Utility:Input({
         local radius = tonumber(value)
         if radius and radius > 0 then
             partRadius = radius
+        end
+    end
+})
+
+-- Add these variables at the top of the script, near other global variables like featureStates
+local speedPadConnection = nil
+local speedPadCharAddedConn = nil
+
+-- Update featureStates to include SpeedPad settings
+if not featureStates.SpeedPadValue then
+    featureStates.SpeedPadValue = 1.3
+end
+if not featureStates.SpeedPadDuration then
+    featureStates.SpeedPadDuration = 2
+end
+
+
+SpeedPadToggle = Tabs.Utility:Toggle({
+    Title = "SpeedPad Booster",
+    Value = false,
+    Callback = function(state)
+        featureStates.SpeedPad = state
+        if state then
+            local character = player.Character or player.CharacterAdded:Wait()
+            local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+            local SPEED_PAD = workspace.Game.Effects.Deployables:WaitForChild("SpeedPad")
+            local SPEED_PAD_POSITION = SPEED_PAD.PrimaryPart and SPEED_PAD.PrimaryPart.Position or SPEED_PAD:GetPivot().Position
+            local MIN_DISTANCE = 1
+            local MAX_DISTANCE = 9
+            local alreadyBoosted = false
+
+            local function applySpeedBoost()
+                if alreadyBoosted then return end
+                alreadyBoosted = true
+                pcall(function()
+                    firesignal(ReplicatedStorage.Events.Character.SpeedBoost.OnClientEvent, "SpeedPad", featureStates.SpeedPadValue, featureStates.SpeedPadDuration, Color3.new(0.490196, 0.607843, 1.000000))
+                end)
+                task.wait(1)
+                alreadyBoosted = false
+            end
+
+            speedPadConnection = RunService.Heartbeat:Connect(function()
+                if not humanoidRootPart or not humanoidRootPart.Parent then
+                    character = player.Character or player.CharacterAdded:Wait()
+                    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+                    return
+                end
+                local distance = (humanoidRootPart.Position - SPEED_PAD_POSITION).Magnitude
+                if distance >= MIN_DISTANCE and distance <= MAX_DISTANCE then
+                    applySpeedBoost()
+                end
+            end)
+
+            if speedPadCharAddedConn then
+                speedPadCharAddedConn:Disconnect()
+            end
+            speedPadCharAddedConn = player.CharacterAdded:Connect(function(newChar)
+                character = newChar
+                humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+                alreadyBoosted = false
+            end)
+        else
+            if speedPadConnection then
+                speedPadConnection:Disconnect()
+                speedPadConnection = nil
+            end
+            if speedPadCharAddedConn then
+                speedPadCharAddedConn:Disconnect()
+                speedPadCharAddedConn = nil
+            end
+        end
+    end
+})
+
+SpeedPadValueInput = Tabs.Utility:Input({
+    Title = "Speed Value",
+    Placeholder = "1.3",
+    Value = tostring(featureStates.SpeedPadValue),
+    NumbersOnly = true,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            featureStates.SpeedPadValue = num
+        end
+    end
+})
+
+SpeedPadDurationInput = Tabs.Utility:Input({
+    Title = "Duration",
+    Placeholder = "2",
+    Value = tostring(featureStates.SpeedPadDuration),
+    NumbersOnly = true,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            featureStates.SpeedPadDuration = num
+        end
+    end
+})
+local jumpPadConnection = nil
+local jumpPadCharAddedConn = nil
+
+if not featureStates.JumpPadBooster then
+    featureStates.JumpPadBooster = false
+end
+if not featureStates.JumpPadValue then
+    featureStates.JumpPadValue = 0
+end
+
+local function setupJumpPadBooster(character)
+    if jumpPadConnection then
+        jumpPadConnection:Disconnect()
+        jumpPadConnection = nil
+    end
+    
+    local humanoid = character:WaitForChild("Humanoid")
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    local jumpPad = workspace.Game.Effects.Deployables:WaitForChild("JumpPad")
+    local deployableEvent = ReplicatedStorage.Events.Other.DeployableUsed.OnClientEvent
+
+    local function onDeployableUsed(deployable, usedOnPlayerModel)
+        if deployable ~= jumpPad then return end
+
+        if not usedOnPlayerModel or not usedOnPlayerModel.Parent then return end
+        if usedOnPlayerModel.Name ~= player.Name then return end
+        if usedOnPlayerModel.Parent ~= workspace.Game.Players then return end
+
+        rootPart.Velocity = Vector3.new(0, featureStates.JumpPadValue, 0)
+        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+
+    jumpPadConnection = deployableEvent:Connect(onDeployableUsed)
+end
+
+JumpPadToggle = Tabs.Utility:Toggle({
+    Title = "Jump Pad Booster",
+    Value = false,
+    Callback = function(state)
+        featureStates.JumpPadBooster = state
+        if state then
+            local character = player.Character or player.CharacterAdded:Wait()
+            setupJumpPadBooster(character)
+
+            if jumpPadCharAddedConn then
+                jumpPadCharAddedConn:Disconnect()
+            end
+            jumpPadCharAddedConn = player.CharacterAdded:Connect(function(newChar)
+                task.wait(1)
+                setupJumpPadBooster(newChar)
+            end)
+
+            if humanoid.FloorMaterial == Enum.Material.Air then
+                local tempPart = Instance.new("Part")
+                tempPart.Name = "TempBouncePart"
+                tempPart.Size = Vector3.new(10, 1, 10)
+                tempPart.Position = rootPart.Position - Vector3.new(0, 3, 0)
+                tempPart.Anchored = true
+                tempPart.CanCollide = true
+                tempPart.Transparency = 1
+                tempPart.Parent = workspace
+
+                rootPart.Velocity = Vector3.new(0, featureStates.JumpPadValue, 0)
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+
+                game:GetService("Debris"):AddItem(tempPart, 1)
+            end
+        else
+            if jumpPadConnection then
+                jumpPadConnection:Disconnect()
+                jumpPadConnection = nil
+            end
+            if jumpPadCharAddedConn then
+                jumpPadCharAddedConn:Disconnect()
+                jumpPadCharAddedConn = nil
+            end
+        end
+    end
+})
+
+JumpPadValueInput = Tabs.Utility:Input({
+    Title = "Jump Value",
+    Placeholder = "0",
+    Value = tostring(featureStates.JumpPadValue),
+    NumbersOnly = true,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            featureStates.JumpPadValue = num
         end
     end
 })
@@ -8075,4 +8336,3 @@ if not workspace:FindFirstChild("SecurityPart") then
     SecurityPart.CanCollide = true
     SecurityPart.Parent = workspace
 end
-
