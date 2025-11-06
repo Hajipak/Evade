@@ -1,4 +1,4 @@
-local validLoadstring = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/main-loader.lua"))()'
+local validLoadstring = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Main-loader.lua"))()'
 local CONFIG_DIR = "DaraHub"
 local CONFIG_FILE_NAME = CONFIG_DIR .. "/DaraHubBigThxForSupport.lua"
 
