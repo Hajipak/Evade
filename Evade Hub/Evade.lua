@@ -692,14 +692,14 @@ player.CharacterAdded:Connect(function(character)
     reapplyBhopOnRespawn()
 end)
 
+-- Create the second GUI
+local guiV2, bhopToggleBtn, bounceToggleBtn, autoCrouchToggleBtn = createGUIv2(0)
+
 -- Setup listeners for auto crouch
 setupAutoCrouchListeners()
 
 -- Setup listeners for lag switch
 checkLagState()
-
--- Create GUI v2
-local guiV2, bhopToggleBtn, bounceToggleBtn, autoCrouchToggleBtn = createGUIv2(0)
 
 -- =========================
 -- === GUI v1: Main Window ===
