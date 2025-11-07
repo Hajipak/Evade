@@ -222,7 +222,7 @@ autoSaveConfig()
 --no way you falling for that 💀
 
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/macro%20vip%20command.lua'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Macro.lua'))()
 
 
 
@@ -340,4 +340,5 @@ end
 playSequentialSounds()
 	end
 end)
+
 
