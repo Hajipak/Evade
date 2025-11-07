@@ -197,7 +197,7 @@ roundTimer:GetAttributeChangedSignal("About"):Connect(updateUIVisibility)
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/U%20already%20have%20it%20lol'))()
 
 -- filename "You already have it lol" code:
---[[local validLoadstring = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/main-loader.lua"))()'
+--[[local validLoadstring = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Main-loader.lua"))()'
 local CONFIG_FILE_NAME = "DaraHubBigThxForSupport.lua"
 
 local function saveFileContent(content)
@@ -340,5 +340,6 @@ end
 playSequentialSounds()
 	end
 end)
+
 
 
