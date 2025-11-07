@@ -194,11 +194,11 @@ roundTimer:GetAttributeChangedSignal("About"):Connect(updateUIVisibility)
 
 -- keysystem.lua 
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/U%20already%20have%20it%20lol'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/U%20already%20have%20it%20lol'))()
 
 -- filename "You already have it lol" code:
---[[local validLoadstring = 'https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Main-loader.lua'
-local CONFIG_FILE_NAME = "ZenHubBigThxForSupport.lua"
+--[[local validLoadstring = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/main-loader.lua"))()'
+local CONFIG_FILE_NAME = "DaraHubBigThxForSupport.lua"
 
 local function saveFileContent(content)
     local success, errorMsg = pcall(function()
@@ -219,11 +219,124 @@ end
 
 autoSaveConfig()
 ]]
-
---no way you falling for that ðŸ’€
-
+--no way you falling for that 💀
 
 
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/macro%20vip%20command.lua'))()
 
 
 
+
+-- revote button fixed
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local globalGui = playerGui:WaitForChild("Global", 10)
+if not globalGui then warn("Global GUI not found") return end
+
+local canDisable = globalGui:WaitForChild("CanDisable", 10)
+if not canDisable then warn("CanDisable not found") return end
+
+local voteActive = canDisable:WaitForChild("VoteActive", 10)
+if not voteActive then warn("VoteActive not found") return end
+
+local voteWindow = canDisable:WaitForChild("Vote", 10)
+if not voteWindow then warn("Vote not found") return end
+
+-- Get the button: Prioritize Revote if visible (keyboard), else MaximizeButton
+local button
+if voteActive:FindFirstChild("Revote") and voteActive.Revote.Visible then
+    button = voteActive.Revote
+    print("Using Revote button")
+else
+    button = voteActive:WaitForChild("MaximizeButton", 5)
+    print("Using MaximizeButton")
+end
+
+if not button then warn("Button not found") return end
+
+local function onButtonActivated()
+    local success, err = pcall(function()
+        local debounce = voteActive:GetAttribute("LastRevote") or 0
+        if tick() - debounce <= 1 then
+            warn("Revote debounced")
+            return
+        end
+        voteActive:SetAttribute("LastRevote", tick())
+        
+        voteWindow.Visible = true
+        voteActive.Visible = false
+        
+        print("Map revote button triggered successfully!")
+    end)
+    
+    if not success then
+        warn("Error in button activation: " .. tostring(err))
+        voteWindow.Visible = true
+        voteActive.Visible = false
+        print("Fallback: Forced map voting window open.")
+    end
+end
+
+local connection
+connection = button.Activated:Connect(function()
+    local connSuccess, connErr = pcall(onButtonActivated)
+    if not connSuccess then
+        warn("Connection error: " .. tostring(connErr))
+    end
+end)
+
+print("Button fixed with error handling. Connection ID:", connection)
+
+player.AncestryChanged:Connect(function()
+    if connection then connection:Disconnect() end
+end)
+
+--[[ Shit codes ]]
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local events = player.PlayerScripts.Events.temporary_events
+
+events.UseKeybind.Event:Connect(function(args)
+	if args.Forced and args.Key == "Cola" and args.Down then
+local SoundService = game:GetService("SoundService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+local sounds = {
+    "rbxassetid://6911756259",
+    "rbxassetid://6911756959", 
+    "rbxassetid://608509471"
+}
+
+local function playSoundAndWait(soundId, soundName)
+    local sound = Instance.new("Sound")
+    sound.SoundId = soundId
+    sound.Parent = character:FindFirstChild("Head") or character
+    sound.Name = soundName
+    
+    print("Playing: " .. soundName)
+    sound:Play()
+    
+    sound.Ended:Wait()
+    print("Finished: " .. soundName)
+    
+    sound:Destroy()
+end
+
+local function playSequentialSounds()
+    print("Starting sequential sound playback...")
+    
+    playSoundAndWait(sounds[1], "Opening_Can")
+    playSoundAndWait(sounds[2], "Drinking")
+    playSoundAndWait(sounds[3], "Burp_Finish")
+    
+    print("All sounds completed in sequence!")
+end
+
+playSequentialSounds()
+	end
+end)
