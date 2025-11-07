@@ -340,6 +340,3 @@ end
 playSequentialSounds()
 	end
 end)
-
-
-
