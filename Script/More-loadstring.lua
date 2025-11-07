@@ -194,7 +194,7 @@ roundTimer:GetAttributeChangedSignal("About"):Connect(updateUIVisibility)
 
 -- keysystem.lua 
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/U%20already%20have%20it%20lol'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/U%20already%20have%20it%20lol'))()
 
 -- filename "You already have it lol" code:
 --[[local validLoadstring = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/main-loader.lua"))()'
@@ -340,3 +340,4 @@ end
 playSequentialSounds()
 	end
 end)
+
