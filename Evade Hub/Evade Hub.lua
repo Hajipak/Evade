@@ -1990,36 +1990,6 @@ local function stopAutoVote()
     end
 end
 
-local function startAutoSelfRevive()
-    if AutoSelfReviveConnection then
-        AutoSelfReviveConnection:Disconnect()
-    end
-    
-    local character = player.Character
-    if not character then return end
-    
-    AutoSelfReviveConnection = character:GetAttributeChangedSignal("Downed"):Connect(function()
-        local isDowned = character:GetAttribute("Downed")
-        if isDowned and not hasRevived then
-            hasRevived = true
-            task.wait(3)
-            
-            ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
-            
-            task.delay(10, function()
-                hasRevived = false
-            end)
-        end
-    end)
-end
-
-local function stopAutoSelfRevive()
-    if AutoSelfReviveConnection then
-        AutoSelfReviveConnection:Disconnect()
-        AutoSelfReviveConnection = nil
-    end
-    hasRevived = false
-end
 
 local function startAutoWin()
     local securityPart = workspace:FindFirstChild("SecurityPart")
@@ -2102,11 +2072,6 @@ local function stopAutoWhistle()
     if autoWhistleHandle then
         task.cancel(autoWhistleHandle)
         autoWhistleHandle = nil
-    end
-end
-local function manualRevive()
-    if character and character:GetAttribute("Downed") then
-        ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
     end
 end
 local function startDownedTracer()
@@ -3964,6 +3929,95 @@ ApplyMethodDropdown = Tabs.Player:Dropdown({
     Default = getgenv().ApplyMode,
     Callback = function(value)
         getgenv().ApplyMode = value
+    end
+})
+local originalEmoteSpeeds = {}
+local itemsFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Items")
+if itemsFolder then
+    local emotesFolder = itemsFolder:FindFirstChild("Emotes")
+    if emotesFolder then
+        for _, emoteModule in ipairs(emotesFolder:GetChildren()) do
+            if emoteModule:IsA("ModuleScript") then
+                local success, emoteData = pcall(require, emoteModule)
+                if success and emoteData and emoteData.EmoteInfo then
+                    originalEmoteSpeeds[emoteModule.Name] = emoteData.EmoteInfo.SpeedMult
+                end
+            end
+        end
+    end
+end
+
+local function applyEmoteSpeed(speedValue)
+    if not itemsFolder then return end
+    local emotesFolder = itemsFolder:FindFirstChild("Emotes")
+    if not emotesFolder then return end
+    
+    for _, emoteModule in ipairs(emotesFolder:GetChildren()) do
+        if emoteModule:IsA("ModuleScript") then
+            local success, emoteData = pcall(require, emoteModule)
+            if success and emoteData and emoteData.EmoteInfo and emoteData.EmoteInfo.SpeedMult ~= 0 then
+                emoteData.EmoteInfo.SpeedMult = speedValue
+            end
+        end
+    end
+end
+
+local function restoreOriginalEmoteSpeeds()
+    if not itemsFolder then return end
+    local emotesFolder = itemsFolder:FindFirstChild("Emotes")
+    if not emotesFolder then return end
+    
+    for _, emoteModule in ipairs(emotesFolder:GetChildren()) do
+        if emoteModule:IsA("ModuleScript") then
+            local originalSpeed = originalEmoteSpeeds[emoteModule.Name]
+            if originalSpeed then
+                local success, emoteData = pcall(require, emoteModule)
+                if success and emoteData and emoteData.EmoteInfo then
+                    emoteData.EmoteInfo.SpeedMult = originalSpeed
+                end
+            end
+        end
+    end
+end
+
+local EmoteSpeedInput = Tabs.Player:Input({
+    Title = "Emote Speed Value",
+    Placeholder = "2",
+    NumbersOnly = true,
+    Callback = function(value)
+        local num = tonumber(value)
+        if num and num > 0 then
+            featureStates.EmoteSpeedValue = num
+            applyEmoteSpeed(num)
+        end
+    end
+})
+
+local ApplyUnwalkableButton = Tabs.Player:Button({
+    Title = "Apply Speed unwalkable Emote",
+    Callback = function()
+        if not itemsFolder then return end
+        
+        local emotesFolder = itemsFolder:FindFirstChild("Emotes")
+        if not emotesFolder then return end
+        
+        local speedValue = featureStates.EmoteSpeedValue or 2
+        
+        for _, emoteModule in ipairs(emotesFolder:GetChildren()) do
+            if emoteModule:IsA("ModuleScript") then
+                local success, emoteData = pcall(require, emoteModule)
+                if success and emoteData and emoteData.EmoteInfo and emoteData.EmoteInfo.SpeedMult == 0 then
+                    emoteData.EmoteInfo.SpeedMult = speedValue
+                end
+            end
+        end
+    end
+})
+
+local ResetEmoteSpeedButton = Tabs.Player:Button({
+    Title = "Reset Emote Speed",
+    Callback = function()
+        restoreOriginalEmoteSpeeds()
     end
 })
     -- Visuals Tab
@@ -6287,27 +6341,209 @@ AutoVoteModeDropdown = Tabs.Auto:Dropdown({
         end
     end
 })
-    AutoSelfReviveToggle = Tabs.Auto:Toggle({
-        Title = "loc:AUTO_SELF_REVIVE",
-        Value = false,
-        Callback = function(state)
-            featureStates.AutoSelfRevive = state
-            if state then
-                startAutoSelfRevive()
-            else
-                stopAutoSelfRevive()
+featureStates.SelfReviveMethod = "Spawnpoint"
+local lastSavedPosition = nil
+local respawnConnection = nil
+local AutoSelfReviveConnection = nil
+local hasRevived = false
+AutoSelfReviveToggle = Tabs.Auto:Toggle({
+    Title = "loc:AUTO_SELF_REVIVE",
+    Value = false,
+    Callback = function(state)
+        featureStates.AutoSelfRevive = state
+        if state then
+            if AutoSelfReviveConnection then
+                AutoSelfReviveConnection:Disconnect()
             end
+            if respawnConnection then
+                respawnConnection:Disconnect()
+            end
+            local character = player.Character
+            if character then
+                local humanoid = character:WaitForChild("Humanoid")
+                local hrp = character:WaitForChild("HumanoidRootPart")
+                AutoSelfReviveConnection = character:GetAttributeChangedSignal("Downed"):Connect(function()
+                    local isDowned = character:GetAttribute("Downed")
+                    if isDowned then
+                        if featureStates.SelfReviveMethod == "Spawnpoint" then
+                            if not hasRevived then
+                                hasRevived = true
+                                -- [[Disabled]] task.wait(3)
+                                pcall(function()
+                                    ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
+                                end)
+                                task.delay(10, function()
+                                    hasRevived = false
+                                end)
+                            end
+                        elseif featureStates.SelfReviveMethod == "Fake Revive" then
+                            if hrp then
+                                lastSavedPosition = hrp.Position
+                            end
+                            task.wait(3)
+                            local startTime = tick()
+                            repeat
+                                pcall(function()
+                              -- [[doesn't work 90%]] firesignal(game:GetService("ReplicatedStorage").Events.UI.CoverScreen.OnClientEvent, false)
+                                    ReplicatedStorage:WaitForChild("Events"):WaitForChild("Player"):WaitForChild("ChangePlayerMode"):FireServer(true)
+                                end)
+                                task.wait(1)
+                            until not character:GetAttribute("Downed") or (tick() - startTime > 1)
+                            local newCharacter
+                            repeat
+                                newCharacter = player.Character
+                                task.wait()
+                            until newCharacter and newCharacter:FindFirstChild("HumanoidRootPart")
+                            local newHRP = newCharacter:FindFirstChild("HumanoidRootPart")
+                            if lastSavedPosition and newHRP then
+                                newHRP.CFrame = CFrame.new(lastSavedPosition)
+                                task.wait(0.5)
+                                local movedDistance = (newHRP.Position - lastSavedPosition).Magnitude
+                                if movedDistance > 1 then
+                                    lastSavedPosition = nil
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+            respawnConnection = player.CharacterAdded:Connect(function(newChar)
+                task.wait(1)
+                local newHumanoid = newChar:WaitForChild("Humanoid")
+                local newHRP = newChar:WaitForChild("HumanoidRootPart")
+                if featureStates.AutoSelfRevive then
+                    AutoSelfReviveConnection = newChar:GetAttributeChangedSignal("Downed"):Connect(function()
+                        local isDowned = newChar:GetAttribute("Downed")
+                        if isDowned then
+                            if featureStates.SelfReviveMethod == "Spawnpoint" then
+                                if not hasRevived then
+                                    hasRevived = true
+                                    task.wait(3)
+                                    pcall(function()
+                                        ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
+                                    end)
+                                    task.delay(10, function()
+                                        hasRevived = false
+                                    end)
+                                end
+                            elseif featureStates.SelfReviveMethod == "Fake Revive" then
+                                if newHRP then
+                                    lastSavedPosition = newHRP.Position
+                                end
+                                task.wait(3)
+                                local startTime = tick()
+                                repeat
+                                    pcall(function()
+                                        ReplicatedStorage:WaitForChild("Events"):WaitForChild("Player"):WaitForChild("ChangePlayerMode"):FireServer(true)
+                                    end)
+                                    task.wait(1)
+                                until not newChar:GetAttribute("Downed") or (tick() - startTime > 1)
+                                local freshCharacter
+                                repeat
+                                    freshCharacter = player.Character
+                                    task.wait()
+                                until freshCharacter and freshCharacter:FindFirstChild("HumanoidRootPart")
+                                local freshHRP = freshCharacter:FindFirstChild("HumanoidRootPart")
+                                if lastSavedPosition and freshHRP then
+                                    freshHRP.CFrame = CFrame.new(lastSavedPosition)
+                                    task.wait(0.5)
+                                    local movedDistance = (freshHRP.Position - lastSavedPosition).Magnitude
+                                    if movedDistance > 1 then
+                                        lastSavedPosition = nil
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                end
+            end)
+        else
+            if AutoSelfReviveConnection then
+                AutoSelfReviveConnection:Disconnect()
+                AutoSelfReviveConnection = nil
+            end
+            if respawnConnection then
+                respawnConnection:Disconnect()
+                respawnConnection = nil
+            end
+            hasRevived = false
+            lastSavedPosition = nil
         end
-    })
+    end
+})
 
-    Tabs.Auto:Button({
-        Title = "loc:MANUAL_REVIVE",
-        Desc = "Manually revive yourself",
-        Icon = "heart",
-        Callback = function()
-            manualRevive()
+SelfReviveMethodDropdown = Tabs.Auto:Dropdown({
+    Title = "Self Revive Method",
+    Values = {"Spawnpoint", "Fake Revive"},
+    Value = "Spawnpoint",
+    Callback = function(value)
+        featureStates.SelfReviveMethod = value
+    end
+})
+if player.Character and featureStates.AutoSelfRevive then
+    local char = player.Character
+    local humanoid = char:WaitForChild("Humanoid")
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    AutoSelfReviveConnection = char:GetAttributeChangedSignal("Downed"):Connect(function()
+    end)
+end
+local function manualRevive()
+    local character = player.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    local isDowned = character:GetAttribute("Downed")
+    if not isDowned then return end
+    
+    if featureStates.SelfReviveMethod == "Spawnpoint" then
+        if not hasRevived then
+            hasRevived = true
+            pcall(function()
+                ReplicatedStorage.Events.Player.ChangePlayerMode:FireServer(true)
+            end)
+            task.delay(10, function()
+                hasRevived = false
+            end)
         end
-    })
+    elseif featureStates.SelfReviveMethod == "Fake Revive" then
+        if hrp then
+            lastSavedPosition = hrp.Position
+        end
+        task.spawn(function()
+            task.wait(3)
+            local startTime = tick()
+            repeat
+                pcall(function()
+                    ReplicatedStorage:WaitForChild("Events"):WaitForChild("Player"):WaitForChild("ChangePlayerMode"):FireServer(true)
+                end)
+                task.wait(1)
+            until not character:GetAttribute("Downed") or (tick() - startTime > 1)
+            
+            local newCharacter
+            repeat
+                newCharacter = player.Character
+                task.wait()
+            until newCharacter and newCharacter:FindFirstChild("HumanoidRootPart")
+            local newHRP = newCharacter:FindFirstChild("HumanoidRootPart")
+            if lastSavedPosition and newHRP then
+                newHRP.CFrame = CFrame.new(lastSavedPosition)
+                task.wait(0.5)
+                local movedDistance = (newHRP.Position - lastSavedPosition).Magnitude
+                if movedDistance > 1 then
+                    lastSavedPosition = nil
+                end
+            end
+        end)
+    end
+end
+
+Tabs.Auto:Button({
+    Title = "loc:MANUAL_REVIVE",
+    Desc = "Manually revive yourself",
+    Icon = "heart",
+    Callback = function()
+        manualRevive()
+    end
+})
 
     AutoWinToggle = Tabs.Auto:Toggle({
         Title = "loc:AUTO_WIN",
@@ -7381,7 +7617,6 @@ local UnlimitedColaToggle = Tabs.Utility:Toggle({
                 if method == "FireServer" and args[2] == 19 then
                     local currentTime = tick()
                     
-                    -- Only block if we haven't blocked recently
                     if currentTime - recentBlockTime >= blockCooldown then
                         print("Blocked FireServer call with value 19")
                         recentBlockTime = currentTime
