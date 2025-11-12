@@ -1,7 +1,7 @@
-if getgenv().ZenHubEvadeExecuted then
+if getgenv().DaraHubEvadeExecuted then
     return
 end
-getgenv().ZenHubEvadeExecuted = true
+getgenv().DaraHubEvadeExecuted = true
 -- Load WindUI
 local WindUI
 
@@ -25,7 +25,7 @@ local Localization = WindUI:Localization({
     DefaultLanguage = "en",
     Translations = {
         ["en"] = {
-            ["SCRIPT_TITLE"] = "Zen Hub",
+            ["SCRIPT_TITLE"] = "Dara Hub",
             ["WELCOME"] = "Made by: Pnsdg And Yomka",
             ["FEATURES"] = "Features",
             ["Player_TAB"] = "Player",
@@ -42,7 +42,6 @@ local Localization = WindUI:Localization({
             ["JUMP_HEIGHT"] = "Jump Height",
             ["JUMP_POWER"] = "Jump Height",
             ["ANTI_AFK"] = "Anti AFK",
-            ["FULL_BRIGHT"] = "FullBright",
             ["NO_FOG"] = "Remove Fog",
             ["PLAYER_NAME_ESP"] = "Player Name ESP",
             ["PLAYER_BOX_ESP"] = "Player Box ESP",
@@ -112,7 +111,7 @@ if featureStates.DisableCameraShake == nil then
 end
 Window:SetIconSize(48)
 Window:Tag({
-    Title = "v1.3",
+    Title = "v1.3.1",
     Color = Color3.fromHex("#30ff6a")
 })
 
@@ -753,7 +752,6 @@ local featureStates = {
     JumpBoost = false,
     AntiAFK = false,
     AutoCarry = false,
-    FullBright = false,
     NoFog = false,
     AutoVote = false,
     AutoSelfRevive = false,
@@ -1926,23 +1924,6 @@ local function stopAutoCarry()
     end
 end
 
-local function startFullBright()
-    originalBrightness = Lighting.Brightness
-    originalOutdoorAmbient = Lighting.OutdoorAmbient
-    originalAmbient = Lighting.Ambient
-    originalGlobalShadows = Lighting.GlobalShadows
-    Lighting.Brightness = 2
-    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-    Lighting.GlobalShadows = false
-end
-
-local function stopFullBright()
-    Lighting.Brightness = originalBrightness
-    Lighting.OutdoorAmbient = originalOutdoorAmbient
-    Lighting.Ambient = originalAmbient
-    Lighting.GlobalShadows = originalGlobalShadows
-end
 local function getServerLink()
     local placeId = game.PlaceId
     local jobId = game.JobId
@@ -2566,7 +2547,7 @@ Tabs.Main:Button({
        Icon = "server",
        Callback = function()
            local success, result = pcall(function()
-               local script = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Advanced%20Server%20Hop.lua"))()
+               local script = loadstring(game:HttpGet("https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Advanced%20Server%20Hop.lua"))()
            end)
            if not success then
                WindUI:Notify({
@@ -2585,6 +2566,23 @@ Tabs.Main:Button({
    })
    Tabs.Main:Section({ Title = "Misc", TextSize = 20 })
    Tabs.Main:Divider()
+
+ResetWhenTakeDamageToggle = Tabs.Main:Toggle({
+    Title = "Reset when take damage",
+    Value = featureStates.ResetWhenTakeDamage,
+    Callback = function(value)
+        featureStates.ResetWhenTakeDamage = value
+    end
+})
+
+ResetDamageTypeDropdown = Tabs.Main:Dropdown({
+    Title = "Reset damage types",
+    Values = {"Any Damage", "Low Health"},
+    Value = featureStates.ResetDamageType,
+    Callback = function(value)
+        featureStates.ResetDamageType = value
+    end
+})
    Tabs.Main:Button({
     Title = "Show/Hide Reload button",
     Desc = "This button allow you to use front view mode without keyboard or any tool in vip server",
@@ -3931,14 +3929,15 @@ ApplyMethodDropdown = Tabs.Player:Dropdown({
         getgenv().ApplyMode = value
     end
 })
-local originalEmoteSpeeds = {}
-local itemsFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Items")
+Tabs.Player:Section({ Title = "Emote Speed (BETA)" })
+originalEmoteSpeeds = {}
+itemsFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Items")
 if itemsFolder then
-    local emotesFolder = itemsFolder:FindFirstChild("Emotes")
+    emotesFolder = itemsFolder:FindFirstChild("Emotes")
     if emotesFolder then
         for _, emoteModule in ipairs(emotesFolder:GetChildren()) do
             if emoteModule:IsA("ModuleScript") then
-                local success, emoteData = pcall(require, emoteModule)
+                success, emoteData = pcall(require, emoteModule)
                 if success and emoteData and emoteData.EmoteInfo then
                     originalEmoteSpeeds[emoteModule.Name] = emoteData.EmoteInfo.SpeedMult
                 end
@@ -3947,14 +3946,14 @@ if itemsFolder then
     end
 end
 
-local function applyEmoteSpeed(speedValue)
+function applyEmoteSpeed(speedValue)
     if not itemsFolder then return end
-    local emotesFolder = itemsFolder:FindFirstChild("Emotes")
+    emotesFolder = itemsFolder:FindFirstChild("Emotes")
     if not emotesFolder then return end
     
     for _, emoteModule in ipairs(emotesFolder:GetChildren()) do
         if emoteModule:IsA("ModuleScript") then
-            local success, emoteData = pcall(require, emoteModule)
+            success, emoteData = pcall(require, emoteModule)
             if success and emoteData and emoteData.EmoteInfo and emoteData.EmoteInfo.SpeedMult ~= 0 then
                 emoteData.EmoteInfo.SpeedMult = speedValue
             end
@@ -3962,16 +3961,16 @@ local function applyEmoteSpeed(speedValue)
     end
 end
 
-local function restoreOriginalEmoteSpeeds()
+function restoreOriginalEmoteSpeeds()
     if not itemsFolder then return end
-    local emotesFolder = itemsFolder:FindFirstChild("Emotes")
+    emotesFolder = itemsFolder:FindFirstChild("Emotes")
     if not emotesFolder then return end
     
     for _, emoteModule in ipairs(emotesFolder:GetChildren()) do
         if emoteModule:IsA("ModuleScript") then
-            local originalSpeed = originalEmoteSpeeds[emoteModule.Name]
+            originalSpeed = originalEmoteSpeeds[emoteModule.Name]
             if originalSpeed then
-                local success, emoteData = pcall(require, emoteModule)
+                success, emoteData = pcall(require, emoteModule)
                 if success and emoteData and emoteData.EmoteInfo then
                     emoteData.EmoteInfo.SpeedMult = originalSpeed
                 end
@@ -3980,32 +3979,140 @@ local function restoreOriginalEmoteSpeeds()
     end
 end
 
-local EmoteSpeedInput = Tabs.Player:Input({
-    Title = "Emote Speed Value",
-    Placeholder = "2",
-    NumbersOnly = true,
+function getMatchingTables()
+    matched = {}
+    for _, obj in pairs(getgc(true)) do
+        if typeof(obj) == "table" then
+            ok = true
+            for field in pairs(requiredFields) do
+                if rawget(obj, field) == nil then
+                    ok = false
+                    break
+                end
+            end
+            if ok then
+                table.insert(matched, obj)
+            end
+        end
+    end
+    return matched
+end
+
+function applySpeedMultiplier(speedMultiplier)
+    targets = getMatchingTables()
+    for _, tableObj in ipairs(targets) do
+        if tableObj and typeof(tableObj) == "table" then
+            pcall(function()
+                tableObj.WalkSpeedMultiplier = speedMultiplier
+            end)
+        end
+    end
+end
+
+function getPlayerObj()
+    gamePlayers = workspace.Game and workspace.Game.Players
+    if not gamePlayers then return nil end
+    return gamePlayers:FindFirstChild(player.Name)
+end
+
+playerObj = nil
+connection = nil
+
+function setupConnection(obj)
+    if connection then 
+        connection:Disconnect() 
+        connection = nil
+    end
+    playerObj = obj
+    if not obj then return end
+    
+    function onStateChanged()
+        state = obj:GetAttribute("State")
+        targetSpeed = (state == "Emoting") and emotingSpeed or 1.5
+        applySpeedMultiplier(targetSpeed)
+    end
+    
+    onStateChanged()
+    connection = obj:GetAttributeChangedSignal("State"):Connect(onStateChanged)
+end
+
+emotingSpeed = 1.5
+
+function resetMultiplierSpeed()
+    emotingSpeed = 1.5
+    applySpeedMultiplier(1.5)
+end
+
+EmoteSpeedModeDropdown = Tabs.Player:Dropdown({
+    Title = "Emote speed mode",
+    Values = {"Nah", "Legit", "Multiplier speed"},
+    Value = "Nah",
     Callback = function(value)
-        local num = tonumber(value)
-        if num and num > 0 then
-            featureStates.EmoteSpeedValue = num
-            applyEmoteSpeed(num)
+        if value == "Nah" then
+            resetMultiplierSpeed()
+            restoreOriginalEmoteSpeeds()
+            if connection then 
+                connection:Disconnect() 
+                connection = nil
+            end
+        elseif value == "Multiplier speed" then
+            restoreOriginalEmoteSpeeds()
+            setupConnection(getPlayerObj())
+            task.spawn(function()
+                while EmoteSpeedModeDropdown.Value == "Multiplier speed" do
+                    task.wait(2)
+                    current = getPlayerObj()
+                    if current ~= playerObj then
+                        setupConnection(current)
+                    elseif playerObj then
+                        state = playerObj:GetAttribute("State")
+                        targetSpeed = (state == "Emoting") and emotingSpeed or 1.5
+                        applySpeedMultiplier(targetSpeed)
+                    end
+                end
+            end)
+        elseif value == "Legit" then
+            resetMultiplierSpeed()
+            if connection then 
+                connection:Disconnect() 
+                connection = nil
+            end
+            speedValue = featureStates.EmoteSpeedValue or 2
+            applyEmoteSpeed(speedValue)
         end
     end
 })
-
-local ApplyUnwalkableButton = Tabs.Player:Button({
+EmoteSpeedInput = Tabs.Player:Input({
+    Title = "Emote Speed Value",
+    Placeholder = "1500",
+    NumbersOnly = true,
+    Callback = function(value)
+        num = tonumber(value)
+        if num and num > 0 then
+            featureStates.EmoteSpeedValue = num
+            if EmoteSpeedModeDropdown.Value == "Legit" then
+                appliedValue = num / 1000
+                applyEmoteSpeed(appliedValue)
+            elseif EmoteSpeedModeDropdown.Value == "Multiplier speed" then
+                appliedValue = num / 1000
+                emotingSpeed = appliedValue
+            end
+        end
+    end
+})
+ApplyUnwalkableButton = Tabs.Player:Button({
     Title = "Apply Speed unwalkable Emote",
     Callback = function()
         if not itemsFolder then return end
         
-        local emotesFolder = itemsFolder:FindFirstChild("Emotes")
+        emotesFolder = itemsFolder:FindFirstChild("Emotes")
         if not emotesFolder then return end
         
-        local speedValue = featureStates.EmoteSpeedValue or 2
+        speedValue = featureStates.EmoteSpeedValue or 2
         
         for _, emoteModule in ipairs(emotesFolder:GetChildren()) do
             if emoteModule:IsA("ModuleScript") then
-                local success, emoteData = pcall(require, emoteModule)
+                success, emoteData = pcall(require, emoteModule)
                 if success and emoteData and emoteData.EmoteInfo and emoteData.EmoteInfo.SpeedMult == 0 then
                     emoteData.EmoteInfo.SpeedMult = speedValue
                 end
@@ -4014,10 +4121,12 @@ local ApplyUnwalkableButton = Tabs.Player:Button({
     end
 })
 
-local ResetEmoteSpeedButton = Tabs.Player:Button({
+ResetEmoteSpeedButton = Tabs.Player:Button({
     Title = "Reset Emote Speed",
+    Desc= "Having Trouble? reset the speed or rejoin",
     Callback = function()
         restoreOriginalEmoteSpeeds()
+        resetMultiplierSpeed()
     end
 })
     -- Visuals Tab
@@ -4316,17 +4425,62 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 	    FullBrightToggle = Tabs.Visuals:Toggle({
-        Title = "loc:FULL_BRIGHT",
-        Value = false,
-        Callback = function(state)
-            featureStates.FullBright = state
-            if state then
-                startFullBright()
-            else
-                stopFullBright()
+    Title = "Full Bright",
+    Desc = "Ya Like drinking Night Vision while mining in da cave and sceard of creeper blow you up dawg?",
+    Value = false,
+    Callback = function(state)
+        featureStates.FullBright = state
+        if state then
+            Lighting = game:GetService("Lighting")
+            
+            featureStates.originalBrightness = Lighting.Brightness
+            featureStates.originalAmbient = Lighting.Ambient
+            featureStates.originalOutdoorAmbient = Lighting.OutdoorAmbient
+            featureStates.originalColorShiftBottom = Lighting.ColorShift_Bottom
+            featureStates.originalColorShiftTop = Lighting.ColorShift_Top
+            
+            Lighting.Brightness = 2
+            Lighting.Ambient = Color3.new(1, 1, 1)
+            Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+            Lighting.ColorShift_Bottom = Color3.new(1, 1, 1)
+            Lighting.ColorShift_Top = Color3.new(1, 1, 1)
+            
+            for _, obj in pairs(Lighting:GetDescendants()) do
+                if obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("ColorCorrectionEffect") or obj:IsA("SunRaysEffect") then
+                    obj.Enabled = false
+                end
+            end
+            
+            featureStates.fullBrightConnection = game.Players.LocalPlayer.CharacterAdded:Connect(function()
+                Lighting.Brightness = 2
+                Lighting.Ambient = Color3.new(1, 1, 1)
+                Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+                Lighting.ColorShift_Bottom = Color3.new(1, 1, 1)
+                Lighting.ColorShift_Top = Color3.new(1, 1, 1)
+            end)
+        else
+            if featureStates.fullBrightConnection then
+                featureStates.fullBrightConnection:Disconnect()
+                featureStates.fullBrightConnection = nil
+            end
+            
+            if featureStates.originalBrightness then
+                Lighting = game:GetService("Lighting")
+                Lighting.Brightness = featureStates.originalBrightness
+                Lighting.Ambient = featureStates.originalAmbient
+                Lighting.OutdoorAmbient = featureStates.originalOutdoorAmbient
+                Lighting.ColorShift_Bottom = featureStates.originalColorShiftBottom
+                Lighting.ColorShift_Top = featureStates.originalColorShiftTop
+            end
+            
+            for _, obj in pairs(Lighting:GetDescendants()) do
+                if obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("ColorCorrectionEffect") or obj:IsA("SunRaysEffect") then
+                    obj.Enabled = true
+                end
             end
         end
-    })
+    end
+})
 
 NoFogToggle = Tabs.Visuals:Toggle({
     Title = "loc:NO_FOG",
@@ -4396,56 +4550,6 @@ TimerDisplayToggle = Tabs.Visuals:Toggle({
         end
     end
 })
-    Tabs.Visuals:Section({ Title = "Emote Changer", TextSize = 20 })
-    Tabs.Visuals:Divider()
-    
-    for i=1,12 do
-        Tabs.Visuals:Input({
-            Title="Current Emote "..i,
-            Placeholder="Enter current emote name",
-            Value=currentEmotes[i],
-            Callback=function(v) 
-                currentEmotes[i]=v:gsub("%s+", "")
-            end
-        })
-    end
-    
-    Tabs.Visuals:Divider()
-    
-    for i=1,12 do
-        Tabs.Visuals:Input({
-            Title="Select Emote "..i,
-            Placeholder="Enter select emote name",
-            Value=selectEmotes[i],
-            Callback=function(v) 
-                selectEmotes[i]=v:gsub("%s+", "")
-            end
-        })
-    end
-    
-    Tabs.Visuals:Button({
-        Title="Apply Emote Mappings",
-        Icon="refresh-cw",
-        Callback=function()
-            for i=1,12 do
-                emoteEnabled[i] = (currentEmotes[i]~="" and selectEmotes[i]~="")
-            end
-            WindUI:Notify({Title="Emote Changer",Content="Emote mappings applied!"})
-        end
-    })
-
-    Tabs.Visuals:Button({
-        Title="Reset All Emotes",
-        Icon="trash-2",
-        Callback=function()
-            for i=1,12 do
-                currentEmotes[i]=""
-                selectEmotes[i]=""
-                emoteEnabled[i]=false
-            end
-            WindUI:Notify({Title="Emote Changer",Content="All emotes reset!"})
-        end
-    })
     Tabs.Visuals:Section({ Title = "Cosmetics Changer", TextSize = 20 })
     Tabs.Visuals:Divider()
     
@@ -4537,6 +4641,122 @@ TimerDisplayToggle = Tabs.Visuals:Toggle({
             end)    
         end
     })
+    Tabs.Visuals:Section({ Title = "Emote Changer", TextSize = 20 })
+    Tabs.Visuals:Divider()
+    
+    for i=1,12 do
+        Tabs.Visuals:Input({
+            Title="Current Emote "..i,
+            Placeholder="Enter current emote name",
+            Value=currentEmotes[i],
+            Callback=function(v) 
+                currentEmotes[i]=v:gsub("%s+", "")
+            end
+        })
+    end
+    
+    Tabs.Visuals:Divider()
+    
+    for i=1,12 do
+        Tabs.Visuals:Input({
+            Title="Select Emote "..i,
+            Placeholder="Enter select emote name",
+            Value=selectEmotes[i],
+            Callback=function(v) 
+                selectEmotes[i]=v:gsub("%s+", "")
+            end
+        })
+    end
+    
+    Tabs.Visuals:Button({
+        Title="Apply Emote Mappings",
+        Icon="refresh-cw",
+        Callback=function()
+            for i=1,12 do
+                emoteEnabled[i] = (currentEmotes[i]~="" and selectEmotes[i]~="")
+            end
+            WindUI:Notify({Title="Emote Changer",Content="Emote mappings applied!"})
+        end
+    })
+
+    Tabs.Visuals:Button({
+        Title="Reset All Emotes",
+        Icon="trash-2",
+        Callback=function()
+            for i=1,12 do
+                currentEmotes[i]=""
+                selectEmotes[i]=""
+                emoteEnabled[i]=false
+            end
+            WindUI:Notify({Title="Emote Changer",Content="All emotes reset!"})
+        end
+     })
+     Tabs.Visuals:Section({ Title = "Character", TextSize = 20 })
+VisualNametagDropdown = Tabs.Visuals:Dropdown({
+    Title = "Visual Nametag",
+    Desc = "Select nametag appearance",
+    Values = {"Ignore", "None"},
+    Value = "Ignore",
+    Callback = function(value)
+        playerFolder = workspace.Game.Players:FindFirstChild(game.Players.LocalPlayer.Name)
+        if playerFolder then
+            if value == "None" then
+                playerFolder:SetAttribute("Nametag", nil)
+            elseif value ~= "Ignore" then
+                cleanValue = value:gsub("%s+", "")
+                playerFolder:SetAttribute("Nametag", cleanValue)
+            end
+        end
+    end
+})
+
+function updateNametagList()
+    nametagValues = {"Ignore", "None"}
+    nametagsFolder = game:GetService("ReplicatedStorage").Items.Nametags
+    
+    if nametagsFolder then
+        for _, nametagModule in ipairs(nametagsFolder:GetChildren()) do
+            if nametagModule:IsA("ModuleScript") then
+                success, nametagData = pcall(require, nametagModule)
+                if success and nametagData and nametagData.AppearanceInfo then
+                    table.insert(nametagValues, nametagData.AppearanceInfo.Name)
+                end
+            end
+        end
+    end
+    
+    VisualNametagDropdown:Refresh(nametagValues, "Ignore")
+end
+
+updateNametagList()
+
+game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
+    wait(1)
+    playerFolder = workspace.Game.Players:FindFirstChild(game.Players.LocalPlayer.Name)
+    if playerFolder and VisualNametagDropdown.Value ~= "Ignore" then
+        if VisualNametagDropdown.Value == "None" then
+            playerFolder:SetAttribute("Nametag", nil)
+        else
+            cleanValue = VisualNametagDropdown.Value:gsub("%s+", "")
+            playerFolder:SetAttribute("Nametag", cleanValue)
+        end
+    end
+end)
+
+game:GetService("RunService").Heartbeat:Connect(function()
+    playerFolder = workspace.Game.Players:FindFirstChild(game.Players.LocalPlayer.Name)
+    if playerFolder and VisualNametagDropdown.Value ~= "Ignore" then
+        if VisualNametagDropdown.Value == "None" then
+            playerFolder:SetAttribute("Nametag", nil)
+        else
+            cleanValue = VisualNametagDropdown.Value:gsub("%s+", "")
+            currentTag = playerFolder:GetAttribute("Nametag")
+            if currentTag ~= cleanValue then
+                playerFolder:SetAttribute("Nametag", cleanValue)
+            end
+        end
+    end
+end)
      -- ESP Tab
     Tabs.ESP:Section({ Title = "ESP", TextSize = 40 })
     Tabs.ESP:Divider()
@@ -8699,3 +8919,79 @@ if not workspace:FindFirstChild("SecurityPart") then
     SecurityPart.CanCollide = true
     SecurityPart.Parent = workspace
 end
+   local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local featureStates = {
+    ResetWhenTakeDamage = false,
+    ResetDamageType = "Any Damage"
+}
+
+local function monitorAnyDamage()
+    local function setupCharacter(character)
+        local humanoid = character:WaitForChild("Humanoid")
+        local lastHealth = humanoid.Health
+        local isAlive = true
+        
+        local function checkAliveStatus()
+            if character:GetAttribute("Downed") then
+                return false
+            end
+            
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                return true
+            end
+            
+            return false
+        end
+        
+        humanoid.HealthChanged:Connect(function(currentHealth)
+            local wasAlive = isAlive
+            isAlive = checkAliveStatus()
+            
+            if featureStates.ResetWhenTakeDamage and isAlive and currentHealth < lastHealth then
+                if featureStates.ResetDamageType == "Any Damage" then
+                    game:GetService("ReplicatedStorage").Events.Character.ToolAction:FireServer(-2)
+                    
+                    local sound = Instance.new("Sound")
+                    sound.SoundId = "rbxassetid://8164951181"
+                    sound.Volume = 3
+                    sound.Parent = game:GetService("SoundService")
+                    sound:Play()
+                    
+                    sound.Ended:Connect(function()
+                        sound:Destroy()
+                    end)
+                elseif featureStates.ResetDamageType == "Low Health" and currentHealth <= 25 then
+                    game:GetService("ReplicatedStorage").Events.Character.ToolAction:FireServer(-2)
+                    
+                    local sound = Instance.new("Sound")
+                    sound.SoundId = "rbxassetid://8164951181"
+                    sound.Volume = 3
+                    sound.Parent = game:GetService("SoundService")
+                    sound:Play()
+                    
+                    sound.Ended:Connect(function()
+                        sound:Destroy()
+                    end)
+                end
+            end
+            
+            lastHealth = currentHealth
+        end)
+        
+        character:GetAttributeChangedSignal("Downed"):Connect(function()
+            isAlive = not character:GetAttribute("Downed")
+        end)
+        
+        isAlive = checkAliveStatus()
+    end
+    
+    if player.Character then
+        setupCharacter(player.Character)
+    end
+    player.CharacterAdded:Connect(setupCharacter)
+end
+
+monitorAnyDamage()
