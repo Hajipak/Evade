@@ -1,7 +1,7 @@
-if getgenv().DaraHubEvadeExecuted then
+if getgenv().ZenHubEvadeExecuted then
     return
 end
-getgenv().DaraHubEvadeExecuted = true
+getgenv().ZenHubEvadeExecuted = true
 -- Load WindUI
 local WindUI
 
@@ -25,7 +25,7 @@ local Localization = WindUI:Localization({
     DefaultLanguage = "en",
     Translations = {
         ["en"] = {
-            ["SCRIPT_TITLE"] = "Dara Hub",
+            ["SCRIPT_TITLE"] = "Zen Hub",
             ["WELCOME"] = "Made by: Pnsdg And Yomka",
             ["FEATURES"] = "Features",
             ["Player_TAB"] = "Player",
