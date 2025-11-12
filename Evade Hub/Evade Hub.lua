@@ -2547,7 +2547,7 @@ Tabs.Main:Button({
        Icon = "server",
        Callback = function()
            local success, result = pcall(function()
-               local script = loadstring(game:HttpGet("https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Advanced%20Server%20Hop.lua"))()
+               local script = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Advanced%20Server%20Hop.lua"))()
            end)
            if not success then
                WindUI:Notify({
