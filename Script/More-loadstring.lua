@@ -3,7 +3,7 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/he
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Evade%20leaderboard.lua'))()
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Reload%20and%20Front%20camera.lua'))()
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Zoom%20button.lua'))()
--- loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Padding%20space.lua'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Padding%20space.lua'))()
 -- Timer Loadstring
 loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Timer-NoRepeat'))()
 --filename "TimerGUI" code inside:
@@ -194,10 +194,10 @@ roundTimer:GetAttributeChangedSignal("About"):Connect(updateUIVisibility)
 
 -- keysystem.lua 
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/U%20already%20have%20it%20lol'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/U%20already%20have%20it%20lol'))()
 
 -- filename "You already have it lol" code:
---[[local validLoadstring = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Main-loader.lua"))()'
+--[[local validLoadstring = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/main-loader.lua"))()'
 local CONFIG_FILE_NAME = "DaraHubBigThxForSupport.lua"
 
 local function saveFileContent(content)
@@ -222,48 +222,126 @@ autoSaveConfig()
 --no way you falling for that 💀
 
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Hajipak/Evade/refs/heads/main/Script/Macro.lua'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Pnsdgsa/Script-kids/refs/heads/main/Scripthub/Darahub/evade/macro%20vip%20command.lua'))()
 
 
 
 
 -- revote button fixed
+
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")  -- For potential heartbeats if needed
+
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local playerGui = player:WaitForChild("PlayerGui", 10)
+if not playerGui then warn("PlayerGui not loaded") return end
 
-local globalGui = playerGui:WaitForChild("Global", 10)
-if not globalGui then warn("Global GUI not found") return end
+print("Starting GUI fixer script...")
 
-local canDisable = globalGui:WaitForChild("CanDisable", 10)
-if not canDisable then warn("CanDisable not found") return end
-
-local voteActive = canDisable:WaitForChild("VoteActive", 10)
-if not voteActive then warn("VoteActive not found") return end
-
-local voteWindow = canDisable:WaitForChild("Vote", 10)
-if not voteWindow then warn("Vote not found") return end
-
--- Get the button: Prioritize Revote if visible (keyboard), else MaximizeButton
-local button
-if voteActive:FindFirstChild("Revote") and voteActive.Revote.Visible then
-    button = voteActive.Revote
-    print("Using Revote button")
-else
-    button = voteActive:WaitForChild("MaximizeButton", 5)
-    print("Using MaximizeButton")
+-- Helper: Wait for child with timeout and fallback to ChildAdded (non-blocking)
+local function waitForChildWithFallback(parent, childName, timeout)
+    timeout = timeout or 10
+    local startTime = os.clock()
+    
+    -- Quick check if already exists
+    local child = parent:FindFirstChild(childName)
+    if child then return child end
+    
+    -- Timed WaitForChild first
+    child = parent:WaitForChild(childName, timeout)
+    if child then return child end
+    
+    -- Fallback: Use ChildAdded with remaining timeout
+    local remainingTime = timeout - (os.clock() - startTime)
+    if remainingTime <= 0 then
+        warn(childName .. " not found within " .. timeout .. "s")
+        return nil
+    end
+    
+    local connection
+    connection = parent.ChildAdded:Connect(function(newChild)
+        if newChild.Name == childName then
+            connection:Disconnect()
+            print(childName .. " added dynamically!")
+        end
+    end)
+    
+    -- Wait out the remaining time
+    local waited = 0
+    while waited < remainingTime do
+        RunService.Heartbeat:Wait()
+        waited = os.clock() - startTime
+        if parent:FindFirstChild(childName) then
+            connection:Disconnect()
+            return parent:FindFirstChild(childName)
+        end
+    end
+    
+    connection:Disconnect()
+    warn(childName .. " never added within timeout")
+    return nil
 end
 
-if not button then warn("Button not found") return end
+-- Wait for main GUI chain with fallback
+local globalGui = waitForChildWithFallback(playerGui, "Global", 15)
+if not globalGui then warn("Global GUI not found - aborting") return end
+print("Global GUI loaded")
+
+local canDisable = waitForChildWithFallback(globalGui, "CanDisable", 15)
+if not canDisable then warn("CanDisable not found - aborting") return end
+print("CanDisable loaded")
+
+local voteActive = waitForChildWithFallback(canDisable, "VoteActive", 15)
+if not voteActive then warn("VoteActive not found - aborting") return end
+print("VoteActive loaded")
+
+local voteWindow = waitForChildWithFallback(canDisable, "Vote", 15)
+if not voteWindow then warn("Vote window not found - aborting") return end
+print("Vote window loaded")
+
+-- Dynamic button detection: Prioritize Revote if it exists/becomes visible, else MaximizeButton
+local button
+local function findButton()
+    -- Check for Revote (wait if needed)
+    local revote = waitForChildWithFallback(voteActive, "Revote", 5)
+    if revote and revote:IsA("GuiButton") and revote.Visible then  -- Ensure it's a button and visible
+        print("Using Revote button")
+        return revote
+    end
+    
+    -- Fallback to MaximizeButton
+    local maximize = waitForChildWithFallback(voteActive, "MaximizeButton", 5)
+    if maximize and maximize:IsA("GuiButton") then
+        print("Using MaximizeButton")
+        return maximize
+    end
+    
+    return nil
+end
+
+button = findButton()
+if not button then
+    warn("No suitable button found - will retry in 2s...")
+    -- Optional: Retry once after a delay (e.g., if GUI updates)
+    wait(2)
+    button = findButton()
+    if not button then
+        warn("Button still not found after retry - aborting")
+        return
+    end
+end
+
+-- Debounce attribute setup (use os.clock for precision)
+local DEBOUNCE_TIME = 1  -- seconds
 
 local function onButtonActivated()
     local success, err = pcall(function()
-        local debounce = voteActive:GetAttribute("LastRevote") or 0
-        if tick() - debounce <= 1 then
+        local lastRevote = voteActive:GetAttribute("LastRevote") or 0
+        if os.clock() - lastRevote <= DEBOUNCE_TIME then
             warn("Revote debounced")
             return
         end
-        voteActive:SetAttribute("LastRevote", tick())
+        voteActive:SetAttribute("LastRevote", os.clock())
         
         voteWindow.Visible = true
         voteActive.Visible = false
@@ -273,26 +351,56 @@ local function onButtonActivated()
     
     if not success then
         warn("Error in button activation: " .. tostring(err))
+        -- Fallback always applies
         voteWindow.Visible = true
         voteActive.Visible = false
         print("Fallback: Forced map voting window open.")
     end
 end
 
-local connection
-connection = button.Activated:Connect(function()
+-- Connect with single pcall wrapper
+local connection = button.Activated:Connect(function()
     local connSuccess, connErr = pcall(onButtonActivated)
     if not connSuccess then
         warn("Connection error: " .. tostring(connErr))
     end
 end)
 
-print("Button fixed with error handling. Connection ID:", connection)
+print("Button fixed! Connection active. ID:", connection)
 
-player.AncestryChanged:Connect(function()
-    if connection then connection:Disconnect() end
+-- Cleanup: Disconnect on player leaving or script context change
+local function cleanup()
+    if connection then
+        connection:Disconnect()
+        connection = nil
+        print("Connection cleaned up")
+    end
+end
+
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if leavingPlayer == player then
+        cleanup()
+    end
 end)
 
+-- Also clean on ancestry change (backup)
+player.AncestryChanged:Connect(cleanup)
+
+-- Optional: Heartbeat retry if button visibility changes (advanced)
+spawn(function()
+    while button.Parent do
+        wait(5)  -- Check every 5s
+        if button.Visible == false and (voteActive:FindFirstChild("Revote") and voteActive.Revote.Visible) then
+            print("Revote became available - switching buttons")
+            cleanup()  -- Disconnect old
+            button = voteActive.Revote
+            connection = button.Activated:Connect(function()
+                pcall(onButtonActivated)
+            end)
+            print("Switched to new connection")
+        end
+    end
+end)
 --[[ Shit codes ]]
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
