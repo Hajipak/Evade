@@ -122,7 +122,8 @@ animateFreezeGlow()
 
 -- Freeze Text
 local FreezeText = Instance.new("TextLabel")
-FreezeText.Size = UDim2.new(1, 0, 1, 0)
+FreezeText.Size = UDim2.new(1, -40, 1, -20)
+FreezeText.Position = UDim2.new(0, 0, 0, 0)
 FreezeText.BackgroundTransparency = 1
 FreezeText.Text = "CYBER FREEZE"
 FreezeText.Font = Enum.Font.GothamBlack
@@ -135,7 +136,7 @@ FreezeText.Parent = MainContainer
 
 -- System Ready Label
 local SystemLabel = Instance.new("TextLabel")
-SystemLabel.Size = UDim2.new(1, 0, 0.4, 0)
+SystemLabel.Size = UDim2.new(1, -40, 0.4, 0)
 SystemLabel.Position = UDim2.new(0, 0, 0.6, 0)
 SystemLabel.BackgroundTransparency = 1
 SystemLabel.Text = "SYSTEM READY"
@@ -146,33 +147,26 @@ SystemLabel.TextStrokeTransparency = 0.8
 SystemLabel.ZIndex = 2
 SystemLabel.Parent = MainContainer
 
--- Settings Icon Button (like in photo)
-local SettingsIcon = Instance.new("ImageButton")
+-- Settings Icon Button (FIXED - Now clickable!)
+local SettingsIcon = Instance.new("TextButton")
 SettingsIcon.Name = "SettingsIcon"
-SettingsIcon.Size = UDim2.new(0, 30, 0, 30)
-SettingsIcon.Position = UDim2.new(1, -40, 0, 10)
+SettingsIcon.Size = UDim2.new(0, 35, 0, 35)
+SettingsIcon.Position = UDim2.new(1, -45, 0, 8)
 SettingsIcon.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
-SettingsIcon.BackgroundTransparency = 0.3
+SettingsIcon.BackgroundTransparency = 0.2
 SettingsIcon.BorderSizePixel = 1
 SettingsIcon.BorderColor3 = Color3.fromRGB(0, 255, 255)
-SettingsIcon.Image = ""
-SettingsIcon.ZIndex = 3
+SettingsIcon.Text = "⚙"
+SettingsIcon.Font = Enum.Font.GothamBold
+SettingsIcon.TextSize = 20
+SettingsIcon.TextColor3 = Color3.fromRGB(0, 255, 255)
+SettingsIcon.ZIndex = 10
+SettingsIcon.AutoButtonColor = false
 SettingsIcon.Parent = MainContainer
 
 local SettingsIconCorner = Instance.new("UICorner")
 SettingsIconCorner.CornerRadius = UDim.new(0, 5)
 SettingsIconCorner.Parent = SettingsIcon
-
--- Settings Icon Text (⚙)
-local SettingsIconText = Instance.new("TextLabel")
-SettingsIconText.Size = UDim2.new(1, 0, 1, 0)
-SettingsIconText.BackgroundTransparency = 1
-SettingsIconText.Text = "⚙"
-SettingsIconText.Font = Enum.Font.GothamBold
-SettingsIconText.TextSize = 18
-SettingsIconText.TextColor3 = Color3.fromRGB(0, 255, 255)
-SettingsIconText.ZIndex = 4
-SettingsIconText.Parent = SettingsIcon
 
 -- Settings Frame
 local SettingsFrame = Instance.new("Frame")
@@ -184,7 +178,8 @@ SettingsFrame.BackgroundColor3 = Color3.fromRGB(10, 30, 50)
 SettingsFrame.BackgroundTransparency = 0.05
 SettingsFrame.BorderSizePixel = 0
 SettingsFrame.Visible = false
-SettingsFrame.ZIndex = 5
+SettingsFrame.ZIndex = 100
+SettingsFrame.Active = true
 SettingsFrame.Parent = ScreenGui
 
 -- Settings Border
@@ -199,17 +194,21 @@ local SettingsGlowFrame = Instance.new("Frame")
 SettingsGlowFrame.Size = UDim2.new(1, 10, 1, 10)
 SettingsGlowFrame.Position = UDim2.new(0, -5, 0, -5)
 SettingsGlowFrame.BackgroundTransparency = 1
-SettingsGlowFrame.ZIndex = 4
+SettingsGlowFrame.ZIndex = 99
 SettingsGlowFrame.Parent = SettingsFrame
 
 local settingsTopBar = createGlowBar("TopBar", UDim2.new(0.3, 0, 0, 3), UDim2.new(0, 0, 0, 0))
 settingsTopBar.Parent = SettingsGlowFrame
+settingsTopBar.ZIndex = 99
 local settingsRightBar = createGlowBar("RightBar", UDim2.new(0, 3, 0.3, 0), UDim2.new(1, 0, 0, 0))
 settingsRightBar.Parent = SettingsGlowFrame
+settingsRightBar.ZIndex = 99
 local settingsBottomBar = createGlowBar("BottomBar", UDim2.new(0.3, 0, 0, 3), UDim2.new(1, 0, 1, 0), Vector2.new(1, 1))
 settingsBottomBar.Parent = SettingsGlowFrame
+settingsBottomBar.ZIndex = 99
 local settingsLeftBar = createGlowBar("LeftBar", UDim2.new(0, 3, 0.3, 0), UDim2.new(0, 0, 1, 0), Vector2.new(0, 1))
 settingsLeftBar.Parent = SettingsGlowFrame
+settingsLeftBar.ZIndex = 99
 
 -- Animate settings glow
 local function animateSettingsGlow()
@@ -245,7 +244,7 @@ SettingsTitle.Text = "SETTINGS"
 SettingsTitle.Font = Enum.Font.GothamBold
 SettingsTitle.TextSize = 24
 SettingsTitle.TextColor3 = Color3.fromRGB(0, 255, 255)
-SettingsTitle.ZIndex = 6
+SettingsTitle.ZIndex = 101
 SettingsTitle.Parent = SettingsFrame
 
 -- Duration Label
@@ -258,7 +257,7 @@ DurationLabel.Font = Enum.Font.Gotham
 DurationLabel.TextSize = 14
 DurationLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 DurationLabel.TextXAlignment = Enum.TextXAlignment.Left
-DurationLabel.ZIndex = 6
+DurationLabel.ZIndex = 101
 DurationLabel.Parent = SettingsFrame
 
 -- Duration Input Box
@@ -271,7 +270,8 @@ DurationBox.Text = tostring(FREEZE_DURATION)
 DurationBox.Font = Enum.Font.Gotham
 DurationBox.TextSize = 18
 DurationBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-DurationBox.ZIndex = 6
+DurationBox.ZIndex = 101
+DurationBox.ClearTextOnFocus = false
 DurationBox.Parent = SettingsFrame
 
 local DurationBoxStroke = Instance.new("UIStroke")
@@ -289,7 +289,7 @@ SizeLabel.Font = Enum.Font.Gotham
 SizeLabel.TextSize = 14
 SizeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 SizeLabel.TextXAlignment = Enum.TextXAlignment.Left
-SizeLabel.ZIndex = 6
+SizeLabel.ZIndex = 101
 SizeLabel.Parent = SettingsFrame
 
 -- Size Input Box
@@ -302,7 +302,8 @@ SizeBox.Text = tostring(buttonSize)
 SizeBox.Font = Enum.Font.Gotham
 SizeBox.TextSize = 18
 SizeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-SizeBox.ZIndex = 6
+SizeBox.ZIndex = 101
+SizeBox.ClearTextOnFocus = false
 SizeBox.Parent = SettingsFrame
 
 local SizeBoxStroke = Instance.new("UIStroke")
@@ -320,7 +321,8 @@ ApplyButton.Text = "APPLY"
 ApplyButton.Font = Enum.Font.GothamBold
 ApplyButton.TextSize = 18
 ApplyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ApplyButton.ZIndex = 6
+ApplyButton.ZIndex = 101
+ApplyButton.AutoButtonColor = false
 ApplyButton.Parent = SettingsFrame
 
 local ApplyCorner = Instance.new("UICorner")
@@ -329,10 +331,12 @@ ApplyCorner.Parent = ApplyButton
 
 -- Click Detector for Freeze (separate from drag)
 local ClickDetector = Instance.new("TextButton")
-ClickDetector.Size = UDim2.new(1, 0, 1, 0)
+ClickDetector.Size = UDim2.new(1, -45, 1, 0)
+ClickDetector.Position = UDim2.new(0, 0, 0, 0)
 ClickDetector.BackgroundTransparency = 1
 ClickDetector.Text = ""
 ClickDetector.ZIndex = 3
+ClickDetector.AutoButtonColor = false
 ClickDetector.Parent = MainContainer
 
 -- Freeze Function
@@ -470,9 +474,10 @@ ClickDetector.MouseLeave:Connect(function()
     end
 end)
 
--- Settings Icon Click
+-- Settings Icon Click (FIXED!)
 SettingsIcon.MouseButton1Click:Connect(function()
     SettingsFrame.Visible = not SettingsFrame.Visible
+    print("Settings toggled:", SettingsFrame.Visible)
 end)
 
 -- Apply Button
@@ -482,6 +487,7 @@ ApplyButton.MouseButton1Click:Connect(function()
     
     if newDuration and newDuration >= 0.1 and newDuration <= 100 then
         FREEZE_DURATION = newDuration
+        print("Duration updated:", FREEZE_DURATION)
     else
         DurationBox.Text = tostring(FREEZE_DURATION)
     end
@@ -489,6 +495,7 @@ ApplyButton.MouseButton1Click:Connect(function()
     if newSize and newSize >= 100 and newSize <= 500 then
         buttonSize = newSize
         MainContainer.Size = UDim2.new(0, buttonSize, 0, buttonSize / 2.5)
+        print("Size updated:", buttonSize)
     else
         SizeBox.Text = tostring(buttonSize)
     end
@@ -538,6 +545,7 @@ if not isMobile then
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if not gameProcessed and input.KeyCode == Enum.KeyCode.F then
             SettingsFrame.Visible = not SettingsFrame.Visible
+            print("Settings toggled with F key:", SettingsFrame.Visible)
         end
     end)
 end
@@ -561,10 +569,13 @@ updateUIState("normal")
 
 if isMobile then
     print("✅ Cyber Freeze loaded for MOBILE!")
-    print("📱 Tap settings icon (⚙) to open settings")
+    print("📱 Tap settings icon (⚙) in top-right corner to open settings")
     print("📱 Tap FREEZE box to activate")
+    print("📱 Touch and drag to move the freeze box")
 else
     print("✅ Cyber Freeze loaded for PC!")
     print("⌨️ Press F to open settings")
+    print("🖱️ Click settings icon (⚙) to open settings")
     print("🖱️ Click FREEZE box to activate")
+    print("🖱️ Click and drag to move the freeze box")
 end
